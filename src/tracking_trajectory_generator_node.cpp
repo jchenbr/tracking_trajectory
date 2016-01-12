@@ -50,7 +50,8 @@ class TrackingTrajectoryGenerator
     //  20. replan disturbance. (done by using the desired state as initial state)
     //  21. distance between target. ()
     //  22. regeneration. ()
-    //  23. laser message 
+    //  23. laser message. (done, to be test) 
+    //  24. tuning the parameter.
 private:
 
     uint32_t _traj_id = 1;
@@ -72,6 +73,8 @@ private:
 
      ///> current innner states infomation
     nav_msgs::Odometry _odom;
+    size_t _odom_queue_size = 300;
+    deque<nav_msgs::Odometry> _odom_queue;
 
     ///> sub-module
   
@@ -94,6 +97,14 @@ private:
     vector<double> _bdy {-100.0, 100.0, -100.0, 100.0, 0.0, 200.0};
     double _map_resolution = 0.2 * 0.2 * 0.2;
     double _safe_margin = 0.2;
+
+    // laser message
+    double _laser_resolution = 0.1;
+    int _laser_count_thld = 3; 
+    double _laser_height_thld = 0.2;
+    double _laser_extra_height = 2.5;
+    ros::Duration _laser_drt = ros::Duration(0.5);
+    ros::Time _laser_stp = ros::TIME_MIN;
 
     // info about the tracking trajectory generation
     VoxelTrajectory::TrajectoryGenerator * _generator = NULL;
@@ -121,6 +132,7 @@ public:
     void rcvTargetObservation(const geometry_msgs::PoseStamped & pose);
     void rcvGlobalPointCloud(const sensor_msgs::PointCloud & cloud);
     void rcvGlobalBlockCloud(const sensor_msgs::PointCloud & cloud);
+    void rcvLocalLaserScan(const sensor_msgs::LaserScan & scan);
 
     void pubTrackingTrajectory();
     void pubVisualTargetTrajectory();
@@ -230,6 +242,13 @@ TrackingTrajectoryGenerator::TrackingTrajectoryGenerator(ros::NodeHandle & crt_h
 
         param_handle.param("setting/lambda", _crd_config.lambda, 0.01);
 
+        param_handle.param("setting/laser/resolution", _laser_resolution, _laser_resolution);
+        param_handle.param("setting/laser/count_threshold", _laser_count_thld, _laser_count_thld);
+        param_handle.param("setting/laser/laser_height_thld", _laser_height_thld, _laser_height_thld);
+        param_handle.param("setting/laser/extra_height", _laser_extra_height, _laser_extra_height);
+        param_handle.param("setting/laser/cycle_duration", drt, _laser_drt.toSec());
+        _laser_drt = ros::Duration(drt);
+
         // the degree of estimatied trajectory
         param_handle.param("estimation/trajectory_degree", _n_dgr_est, _n_dgr_est);
         param_handle.param("estimation/observation_size", _sz_tgt_obs, _sz_tgt_obs);
@@ -264,6 +283,9 @@ void TrackingTrajectoryGenerator::rcvTargetObservation(const geometry_msgs::Pose
 void TrackingTrajectoryGenerator::rcvCurrentOdometry(const nav_msgs::Odometry & odom)
 {
     _odom = odom;
+
+    _odom_queue.push_back(odom);
+    while (_odom_queue.size() > _odom_queue_size) _odom_queue.pop_front();
 }
 
 void TrackingTrajectoryGenerator::rcvGlobalPointCloud(const sensor_msgs::PointCloud & cloud)
@@ -440,3 +462,30 @@ void TrackingTrajectoryGenerator::visMapCallback(const ros::TimerEvent & evt)
     pubVisualMapGrids();
 }
 
+void TrackingTrajectoryGenerator::rcvLocalLaserScan(const sensor_msgs::LaserScan & scan)
+{
+    if (_odom_queue.empty()) return ;
+    if (scan.header.stamp - _laser_stp < _laser_drt) return ;
+    _laser_stp = scan.header.stamp;
+
+    for (auto & odom: _odom_queue)
+       if (odom.header.stamp > _laser_stp)
+       {
+           auto blk = getStdVecFromLaserScan(scan, odom,
+                   _safe_margin, _laser_resolution, _laser_count_thld);
+           for (int idx = 0; idx < (int)blk.size(); idx += _TOT_BDY)
+           {
+               auto height = 0.5 * (blk[idx + _BDY_L_Z] + blk[idx + _BDY_R_Z]);
+               // if is near the ground, remove it
+               // otherwise, add extra height 
+               if (height < _laser_height_thld)
+               {
+                   blk[idx + _BDY_L_Z] = blk[idx + _BDY_R_Z] 
+                       = _bdy[_BDY_L_Z] - _laser_extra_height;
+               }else
+               {
+                   blk[_BDY_R_Z] += _laser_extra_height;
+               }
+           }
+       } 
+}

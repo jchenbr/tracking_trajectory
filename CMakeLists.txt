@@ -5,6 +5,7 @@ project(tracking_trajectory)
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
+  laser_geometry
   message_generation
   nav_msgs
   quadrotor_msgs
