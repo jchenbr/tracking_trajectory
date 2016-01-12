@@ -1,0 +1,16 @@
+
+<launch>
+    <node 
+        pkg = "rviz" 
+        type = "rviz" 
+        name = "rviz"
+        args = "-d $(find tracking_trajectory)/config/test_estimator.rviz" >
+    </node>
+    <node
+        pkg = "tracking_trajectory"
+        type = "test_estimator_node"
+        name = "test_estimator_node"
+        output = "screen">
+        <remap from = "~observed_position" to = "/goal"/>
+    </node>
+</launch>

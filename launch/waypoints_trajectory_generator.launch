@@ -1,0 +1,58 @@
+<launch>
+
+    <arg name = "waypoints_path"/>
+    <arg name = "odometry_path"/>
+    <arg name = "position_cmd_path"/>
+    <arg name = "obstacle_points_path"/>
+    <arg name = "obstacle_blocks1_path"/>
+    <arg name = "obstacle_blocks2_path"/>
+    <arg name = "laser_scan_path"/>
+
+    <node
+        pkg     = "voxel_trajectory"
+        type    = "grid_trajectory_generator_node"
+        output  = "log"
+        name    = "trajectory_generator">
+        
+       
+        <rosparam command = "load"
+            file = "$(find tracking_trajectory)/config/waypoints_trajectory_generator.yaml"/>
+            
+            <!-- subscribed topics -->
+            <remap  from = "~obstacle_points"   to = "$(arg obstacle_points_path)"/>
+            <remap  from = "~obstacle_blocks1"   to = "$(arg obstacle_blocks1_path)"/>
+            <remap  from = "~obstacle_blocks"   to = "$(arg obstacle_blocks2_path)"/>
+            <remap  from = "~laser_scan"        to = "$(arg laser_scan_path)"/>
+            <remap  from = "~odometry"          to = "$(arg odometry_path)"/>
+            <remap  from = "~goal_point"        to = "~goal_point"/>
+            <remap  from = "~waypoints"         to = "$(arg waypoints_path)"/>
+
+            <!-- advertised topics -->
+            <remap  from = "~desired_state"     to = "position_cmd_old"/>
+            <remap  from = "~trajectory"        to = "~trajectory"/>
+
+            <!-- advertised visualization topics -->
+            <remap  from = "~map_vis"           to = "~visualization/map_grids"/>
+            <remap  from = "~trajectory_vis"    to = "~visualization/trajectory"/>
+            <remap  from = "~path_vis"          to = "~visualization/corridor"/>
+            <remap  from = "~inflated_path_vis" to = "~visualization/inflated_corridor"/>
+            <remap  from = "~checkpoints_vis"   to = "~visualization/check_points"/>
+        </node>
+
+
+    <node
+        pkg     = "voxel_trajectory"
+        type    = "grid_trajectory_server_node"
+        output  = "screen"
+        name    = "trajectory_server">
+        
+        
+        <!-- subscribed topics -->
+        <remap  from = "~trajectory"        to = "trajectory_generator/trajectory"/>
+        <remap  from = "~odometry"          to = "$(arg odometry_path)"/>
+        
+        <!-- advertised topics -->
+        <remap  from = "~position_command"  to = "$(arg position_cmd_path)"/>
+    </node>
+        
+</launch>

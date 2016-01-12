@@ -1,0 +1,44 @@
+
+setting :
+    maintained_distance : 
+        - 0.0 
+        - 1.0
+        - 1.0
+    regeneration_duration : 0.25
+    lambda : 0.001
+
+# dynamic setting
+dynamic :
+    trajectory_degree : 6
+    minimization_degree : 3
+    max_velocity : 4.0
+    max_acceleration : 5.0
+    flight_velocity : 1.0
+    flight_acceleration : 1.0
+
+# map setting
+map :
+    resolution : 0.008
+    safe_margin : 0.2
+    boundary:
+        lower_x : -20.0
+        upper_x : 20.0
+        lower_y : -20.0
+        upper_y : 20.0
+        lower_z : 0.0
+        upper_z : 40.0
+
+# estimation setting
+estimation :
+    trajectory_degree : 3
+    observation_size : 75
+    predition_time : 7.0
+
+
+#
+visualization :
+    flag : y
+    corridor:
+        color_rbga : [0.1 0.0 0.7 0.1]
+    map : 
+        duration : 1.0

@@ -1,0 +1,48 @@
+<launch>
+
+    <arg name = "odometry_path"/>
+    <arg name = "observation_path"/>
+    <arg name = "obstacle_points_path"/>
+    <arg name = "obstacle_blocks_path"/>
+    <arg name = "position_cmd_path"/>
+
+    <node
+        pkg = "tracking_trajectory"
+        type = "tracking_trajectory_generator_node"
+        output = "screen"
+        name = "trajectory_generator">
+        
+        <rosparam command = "load"
+            file = "$(find tracking_trajectory)/config/tracking_trajectory_generator.yaml"/>
+        
+        <!-- subscribed topics -->
+        <remap from = "~odometry" to = "$(arg odometry_path)"/>
+        <remap from = "~target_observation" to = "$(arg observation_path)"/>
+        <remap from = "~obstacle_points" to = "$(arg obstacle_points_path)"/>
+        <remap from = "~obstacle_blocks" to = "$(arg obstacle_blocks_path)"/>
+        
+        <!-- advertised topcis -->
+        <remap from = "~flight_trajectory" to = "~trajectory"/>
+        
+        <!-- visualization topcis -->
+        <remap from = "~visual_flight_trajectory" to = "visualization/flight_trajectory"/>
+        <remap from = "~visual_flight_corridor" to = "visualization/flight_corridor"/>
+        <remap from = "~visual_estimated_trajetory" to = "visualization/estimated_trajectory"/>
+        <remap from = "~visual_map_grids" to = "visualization/map_grids"/>
+   </node>
+   
+   <node
+        pkg     = "voxel_trajectory"
+        type    = "grid_trajectory_server_node"
+        output  = "screen"
+        name    = "trajectory_server">
+        
+        
+        <!-- subscribed topics -->
+        <remap  from = "~trajectory"        to = "trajectory_generator/trajectory"/>
+        <remap  from = "~odometry"          to = "$(arg odometry_path)"/>
+        
+        <!-- advertised topics -->
+        <remap  from = "~position_command"  to = "$(arg position_cmd_path)"/>
+    </node>
+</launch>
