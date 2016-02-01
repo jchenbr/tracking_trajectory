@@ -11,7 +11,6 @@ namespace VoxelTrajectory
 {
     class TrajectoryGenerator
     {
-private:
 public:
         /* destination trajectory generation call */
         // generate the trajectory to reach the goal
@@ -68,6 +67,8 @@ public:
             double f_vel, f_acc; // the dynamic for time allocation
             double t_beg, t_end;
             double lambda;
+            
+            bool use_stop_policy = false;
 
             bool isLegal();
             DimensionConfig getDimensionConfig(int dim);
@@ -80,7 +81,10 @@ public:
             //double coeff_t;
             int error_code = 0;
         };
+private:
    };
+
+
 }
 
 

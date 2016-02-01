@@ -12,6 +12,9 @@ find_package(catkin REQUIRED COMPONENTS
   roscpp
   sensor_msgs
   visualization_msgs
+  voxel_trajectory
+  cv_bridge
+  tf
 )
 
 
@@ -20,10 +23,13 @@ set(CMAKE_CXX_FLAGS "-std=c++11 -g ${CMAKE_CXX_FLAGS}")
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
+cmake_policy(SET CMP0015 NEW)
 
-find_package(Eigen3 REQUIRED )
+find_package(Eigen3 REQUIRED)
 include_directories(${EIGEN3_INCLUDE_DIRS})
+link_directories(library)
 
+find_package(aruco REQUIRED)
 ## Uncomment this if the package has a setup.py. This macro ensures
 ## modules and global scripts declared therein get installed
 ## See http://ros.org/doc/api/catkin/html/user_guide/setup_dot_py.html
@@ -123,9 +129,7 @@ catkin_package(
 ## Specify additional locations of header files
 ## Your package locations should be listed before other locations
 include_directories(include)
-include_directories(
-  ${catkin_INCLUDE_DIRS}
-)
+include_directories(${catkin_INCLUDE_DIRS})
 
 ## Declare a C++ library
 # add_library(tracking_trajectory
@@ -152,12 +156,12 @@ include_directories(
 add_executable(obstacle_generator_node
     src/obstacle_generator_node.cpp)
 
-add_executable(test_estimator_node 
-    src/test_estimator.cpp
-    src/octomap.cpp
-    src/voxel_graph.cpp
-    src/trajectory_generator_fast.cpp
-)
+#add_executable(test_estimator_node 
+#    src/test_estimator.cpp
+#    src/octomap.cpp
+#    src/voxel_graph.cpp
+#    src/trajectory_generator_fast.cpp
+#)
 
 add_executable(tracking_trajectory_generator_node
     src/tracking_trajectory_generator_node.cpp
@@ -174,31 +178,28 @@ add_executable(simulated_commander_node
     src/simulated_commander_node.cpp
 )
 
+add_executable(tag_detector_node
+    src/tag_detector_node.cpp
+)
+
+add_executable(tracking_trajectory_server_node
+    src/trajectory_server_node.cpp
+)
+
 target_link_libraries(obstacle_generator_node
     ${catkin_LIBRARIES}
 )
 
-target_link_libraries(test_estimator_node
-    ${catkin_LIBRARIES}
-    ooqpgensparse
-    ooqpsparse
-    ooqpgondzio
-    ooqpbase
-    blas
-    ma27
-    gfortran
-)
-
-target_link_libraries(test_estimator_node
-    ${catkin_LIBRARIES}
-    ooqpgensparse
-    ooqpsparse
-    ooqpgondzio
-    ooqpbase
-    blas
-    ma27
-    gfortran
-)
+#target_link_libraries(test_estimator_node
+#    ${catkin_LIBRARIES}
+#    ooqpgensparse
+#    ooqpsparse
+#    ooqpgondzio
+#    ooqpbase
+#    blas
+#    ma27
+#    gfortran
+#)
 
 target_link_libraries(tracking_trajectory_generator_node
    ${catkin_LIBRARIES}
@@ -209,6 +210,7 @@ target_link_libraries(tracking_trajectory_generator_node
    blas
    ma27
    gfortran
+   mosek64
 )
 
 target_link_libraries(simulated_sensor_node
@@ -216,6 +218,15 @@ target_link_libraries(simulated_sensor_node
    
 target_link_libraries(simulated_commander_node
    ${catkin_LIBRARIES})
+
+target_link_libraries(tag_detector_node
+    ${catkin_LIBRARIES}
+    ${aruco_LIBS}
+)
+
+target_link_libraries(tracking_trajectory_server_node
+    ${catkin_LIBRARIES}
+)
 
 #############
 ## Install ##

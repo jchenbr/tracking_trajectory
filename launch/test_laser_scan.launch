@@ -1,0 +1,45 @@
+<launch>
+    
+    <group ns = "tracker" clear_params = "true">
+        <include ns = "quadrotor" file = "$(find tracking_trajectory)/launch/simulated_quadrotor.launch">
+            <arg name = "odometry_path" value = "/tracker/odometry"/>
+            <arg name = "position_cmd_path" value = "/tracker/position_cmd"/>
+        </include>
+        
+        
+        <include ns = "trajectory" file = "$(find tracking_trajectory)/launch/tracking_trajectory_generator.launch">
+            <arg name = "observation_path" value = "/tracker/observation"/>
+            <arg name = "odometry_path" value = "/odom"/>
+            <arg name = "obstacle_points_path" value = "/environment/obstacle_points"/>
+            <arg name = "obstacle_blocks_path" value = "/environment/obstacle_blocks"/>
+            <arg name = "position_cmd_path" value = "/tracker/position_cmd"/>
+            <arg name = "laser_scan_path" value = "/scan"/>
+        </include>
+        
+        <!-- Visualization -->
+        <node pkg="odom_visualization"
+            name="odom_visualization_ukf"
+            type="odom_visualization"       
+            output="screen">
+            
+            <rosparam>
+                color :
+                    a : 0.8
+                    r : 0.0
+                    g : 1.0
+                    b : 0.0
+                covariance_scale : 100.0
+            </rosparam>  
+            <remap from= "~odom" to = "/odom"/>
+        </node>
+    </group>
+    
+    <node 
+        name = "rviz" 
+        pkg = "rviz" 
+        type = "rviz" 
+        output = "screen"
+        respawn = "true"
+        args="-d $(find tracking_trajectory)/config/visualization.rviz"/>     
+
+</launch>

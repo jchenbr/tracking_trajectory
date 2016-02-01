@@ -11,6 +11,10 @@
 #include <visualization_msgs/MarkerArray.h>
 #include <visualization_msgs/Marker.h>
 #include <sensor_msgs/PointCloud.h>
+#include <sensor_msgs/LaserScan.h>
+#include <nav_msgs/Odometry.h>
+#include <geometry_msgs/PoseStamped.h>
+#include <laser_geometry/laser_geometry.h>
 #include <eigen3/Eigen/Dense>
 using namespace std;
 using namespace Eigen;
@@ -31,6 +35,16 @@ Eigen::MatrixXd getStateFromTrajByTime(
 Eigen::MatrixXd getStateFromTrajByTime(
         const Eigen::MatrixXd & coef,
         double t);
+
+Eigen::Vector3d getWorldPositionFromCam(
+        const geometry_msgs::Pose & pose_tgt_cam,
+        const geometry_msgs::Pose & pose_cam_bd,
+        const geometry_msgs::Pose & pose_bd_wd);
+        
+geometry_msgs::Pose getWorldPoseMsgFromCam(
+        const geometry_msgs::Pose & pose_tgt_cam,
+        const geometry_msgs::Pose & pose_cam_bd,
+        const geometry_msgs::Pose & pose_bd_wd);
 
 /* the declaration of message transform */
 
@@ -65,6 +79,14 @@ vector<double> getStdVecFromPointCloud(
         const sensor_msgs::PointCloud &cloud,
         double margin = _EPS);
 
+vector<double> getStdVecFromLaserScan(
+        const sensor_msgs::LaserScan & scan,
+        const nav_msgs::Odometry & odom,
+        double margin = _EPS,
+        double resolution = _EPS,
+        int count_thld = 0,
+        double height_thld = _EPS,
+        double extra_height = _EPS);
 ///> Here are the implementations.
 
 visualization_msgs::MarkerArray getCorridorMsgByMatrix(
@@ -364,10 +386,11 @@ Eigen::MatrixXd getStateFromTrajByTime(
 
     for (int i = 0; i < m; ++i)
     {
-        if (t > time(i)) 
+        if (i + 1  < m && t > time(i)) 
             t -= time(i);
         else
         {
+#if 0
             double T = 1.0;
             for (int j = 0; j < n; ++j)
             {
@@ -378,6 +401,21 @@ Eigen::MatrixXd getStateFromTrajByTime(
                     ret.row(2) += coef.row(i * n + j + 2) * T * (j + 1) * (j + 2); 
                 T *= t;
             }
+#else
+            ROS_WARN_STREAM("[fuck it] " << n << ", " << m);
+            Eigen::MatrixXd T = MatrixXd::Zero(3, n);
+            ROS_WARN_STREAM("[fuck it] " << n << ", " << m);
+            VectorXd cum_t(n);
+            cum_t(0) = 1.0;
+            for (int j = 1; j < n; ++j) cum_t(j) = cum_t(j - 1) * t;
+            for (int j = 0; j < n; ++j)
+            {
+                T(0, j) = cum_t(j);
+                if (j > 0) T(1, j) = cum_t(j - 1) * j;
+                if (j > 1) T(2, j) = cum_t(j - 2) * j * (j -1);
+            }
+            ret = T * coef.block(i * n, 0, n, 3);
+#endif
             break;
         }
     }
@@ -412,6 +450,172 @@ quadrotor_msgs::PolynomialTrajectory getTrajMsgByMatrix(
 
     ret.start_yaw = 0.0;
     ret.final_yaw = 0.0;
+    return ret;
+}
+
+vector<double> getStdVecFromLaserScan(
+        const sensor_msgs::LaserScan & scan,
+        const nav_msgs::Odometry & odom,
+        double margin,
+        double resolution,
+        int count_thld,
+        double height_thld,
+        double extra_height)
+{
+    sensor_msgs::PointCloud cloud;
+    laser_geometry::LaserProjection projector;
+    projector.projectLaser(scan, cloud);
+
+    Eigen::Quaterniond quad(
+            odom.pose.pose.orientation.w,
+            odom.pose.pose.orientation.x,
+            odom.pose.pose.orientation.y,
+            odom.pose.pose.orientation.z);
+    Eigen::Matrix3d rotate = quad.toRotationMatrix();
+
+    Eigen::Vector3d trans(
+            odom.pose.pose.position.x,
+            odom.pose.pose.position.y,
+            odom.pose.pose.position.z);
+
+    vector<double> blk;
+
+    if (cloud.points.empty()) return blk;
+    
+    auto getGlobalPoint = [&](geometry_msgs::Point32 pt)
+    {
+        Eigen::Vector3d ret(pt.x, pt.y, pt.z);
+        return rotate * ret + trans;
+    };
+
+    blk.reserve(cloud.points.size() * _TOT_BDY);
+    Eigen::Vector3d last_pt = getGlobalPoint(cloud.points.front());
+    int count = -1;
+
+    for (auto & lp: cloud.points)
+    {
+        auto pt = getGlobalPoint(lp);
+
+        if ( (pt - last_pt).norm() < resolution)
+            count += 1;
+        else
+        {
+            if (count >= count_thld && pt(_DIM_Z) > height_thld)
+            {
+                blk.push_back(pt(_DIM_X) - margin);
+                blk.push_back(pt(_DIM_X) + margin);
+                blk.push_back(pt(_DIM_Y) - margin);
+                blk.push_back(pt(_DIM_Y) + margin);
+                blk.push_back(pt(_DIM_Z) - margin);
+                blk.push_back(pt(_DIM_Z) + margin + extra_height);
+            }
+            count = 0;
+            last_pt = pt;
+        }
+    }
+    if (count >= count_thld)
+    {
+        blk.push_back(last_pt(_DIM_X) - margin);
+        blk.push_back(last_pt(_DIM_X) + margin);
+        blk.push_back(last_pt(_DIM_Y) - margin);
+        blk.push_back(last_pt(_DIM_Y) + margin);
+        blk.push_back(last_pt(_DIM_Z) - margin);
+        blk.push_back(last_pt(_DIM_Z) + margin + extra_height);
+    }
+    return blk;
+}
+
+Eigen::Vector3d getWorldPositionFromCam(
+        const geometry_msgs::Pose & pose_tgt_cam,
+        const geometry_msgs::Pose & pose_cam_bd,
+        const geometry_msgs::Pose & pose_bd_wd)
+{
+    Eigen::Vector3d p_tgt_cam, p_cam_bd, p_bd_wd;
+    Eigen::Matrix3d o_cam_bd, o_bd_wd;
+    
+    p_tgt_cam <<
+        pose_tgt_cam.position.x,
+        pose_tgt_cam.position.y,
+        pose_tgt_cam.position.z;
+
+    p_cam_bd << 
+        pose_cam_bd.position.x, 
+        pose_cam_bd.position.y, 
+        pose_cam_bd.position.z; 
+
+    p_bd_wd <<
+        pose_bd_wd.position.x,
+        pose_bd_wd.position.y,
+        pose_bd_wd.position.x;
+
+
+    o_cam_bd = Quaterniond(
+        pose_cam_bd.orientation.w,
+        pose_cam_bd.orientation.x,
+        pose_cam_bd.orientation.y,
+        pose_cam_bd.orientation.z).toRotationMatrix();
+
+    o_bd_wd = Quaterniond(
+        pose_bd_wd.orientation.w,
+        pose_bd_wd.orientation.x,
+        pose_bd_wd.orientation.y,
+        pose_bd_wd.orientation.z).toRotationMatrix();
+
+    return o_bd_wd * (o_cam_bd * p_tgt_cam + p_cam_bd) + p_bd_wd;
+}
+
+
+geometry_msgs::Pose getWorldPoseMsgFromCam(
+        const geometry_msgs::Pose & pose_tgt_cam,
+        const geometry_msgs::Pose & pose_cam_bd,
+        const geometry_msgs::Pose & pose_bd_wd)
+{    
+    Eigen::Vector3d p_tgt_cam, p_cam_bd, p_bd_wd;
+    Eigen::Matrix3d o_tgt_cam, o_cam_bd, o_bd_wd;
+    
+    p_tgt_cam <<
+        pose_tgt_cam.position.x,
+        pose_tgt_cam.position.y,
+        pose_tgt_cam.position.z;
+
+    p_cam_bd << 
+        pose_cam_bd.position.x, 
+        pose_cam_bd.position.y, 
+        pose_cam_bd.position.z; 
+
+    p_bd_wd <<
+        pose_bd_wd.position.x,
+        pose_bd_wd.position.y,
+        pose_bd_wd.position.x;
+
+    o_tgt_cam = Quaterniond(
+        pose_tgt_cam.orientation.w,
+        pose_tgt_cam.orientation.x,
+        pose_tgt_cam.orientation.y,
+        pose_tgt_cam.orientation.z).toRotationMatrix();
+
+    o_cam_bd = Quaterniond(
+        pose_cam_bd.orientation.w,
+        pose_cam_bd.orientation.x,
+        pose_cam_bd.orientation.y,
+        pose_cam_bd.orientation.z).toRotationMatrix();
+
+    o_bd_wd = Quaterniond(
+        pose_bd_wd.orientation.w,
+        pose_bd_wd.orientation.x,
+        pose_bd_wd.orientation.y,
+        pose_bd_wd.orientation.z).toRotationMatrix();
+
+    Eigen::Vector3d pos = o_bd_wd * (o_cam_bd * p_tgt_cam + p_cam_bd) + p_bd_wd;
+    Eigen::Quaterniond ort(o_bd_wd * o_cam_bd * o_tgt_cam);
+    geometry_msgs::Pose ret;
+    ret.position.x = pos(0);
+    ret.position.y = pos(1);
+    ret.position.z = pos(2);
+    ret.orientation.w = ort.w();
+    ret.orientation.x = ort.x();
+    ret.orientation.y = ort.y();
+    ret.orientation.z = ort.z();
     return ret;
 }
 

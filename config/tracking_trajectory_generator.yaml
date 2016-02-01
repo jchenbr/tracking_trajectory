@@ -2,37 +2,62 @@
 setting :
     maintained_distance : 
         - 0.0 
-        - 1.0
+        - 2.0
         - 1.0
     regeneration_duration : 0.25
-    lambda : 0.001
+    lambda : 1
+    
+    # laser setting
+    laser :
+        resolution : 0.05
+        count_threshold : 2
+        laser_height_threshold : 0.25
+        extra_height : 2.5
+        cycle_duration : 0.0
+    
+    # camera setting
+    camera :
+        position : 
+            - 0.074
+            - 0.102
+            - 0.100
+        orientation :
+            - -0.5
+            - 0.5
+            - -0.5
+            - 0.5
+        cycle_duration : 0.009
+        
 
 # dynamic setting
 dynamic :
     trajectory_degree : 6
     minimization_degree : 3
-    max_velocity : 4.0
-    max_acceleration : 5.0
+    max_velocity : 3.0
+    max_acceleration : 2.0
     flight_velocity : 1.0
     flight_acceleration : 1.0
 
 # map setting
 map :
     resolution : 0.008
-    safe_margin : 0.2
+    safe_margin : 0.4
     boundary:
-        lower_x : -20.0
-        upper_x : 20.0
-        lower_y : -20.0
-        upper_y : 20.0
-        lower_z : 0.0
-        upper_z : 40.0
+        lower_x : -40.0
+        upper_x : 40.0
+        lower_y : -40.0
+        upper_y : 40.0
+        lower_z : -20.0
+        upper_z : 60.0
 
 # estimation setting
 estimation :
-    trajectory_degree : 3
-    observation_size : 75
-    predition_time : 7.0
+    reserved_duration : 5.0
+    valid_size : 20
+    trajectory_degree : 6
+    observation_size : 40
+    predition_time : 7
+    lambda : 1.0
 
 
 #

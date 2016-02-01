@@ -1,0 +1,18 @@
+<launch>
+    <node name="rosbag" pkg="rosbag" type="play" respawn="false" args="--delay=1 --queue=1000 $(find tag_detector)/bag/images.bag" />
+    <node 
+        pkg = "tracking_trajectory"
+        type = "tag_detector_node"
+        name = "tag_detector"
+        output = "screen">
+        
+        <param name="camera_calibration_file" type="string" value="$(find tracking_trajectory)/config/mv_25001173.yml"/> 
+        <rosparam>
+            tag_id : 605
+            marker_size : 0.274
+        </rosparam>
+        
+        <remap from = "~camera_image" to = "/bluefox2/image"/> 
+        <remap from = "~tag_pose" to = "~tag_pose"/>
+    </node>
+</launch>

@@ -37,6 +37,8 @@
             <remap  from = "~path_vis"          to = "~visualization/corridor"/>
             <remap  from = "~inflated_path_vis" to = "~visualization/inflated_corridor"/>
             <remap  from = "~checkpoints_vis"   to = "~visualization/check_points"/>
+            
+            <remap  from = "~CheckObstacleByPoints" to = "check_points"/>
         </node>
 
 

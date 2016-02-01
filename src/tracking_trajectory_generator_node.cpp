@@ -6,8 +6,10 @@
 
 #include <ros/ros.h>
 #include <ros/console.h>
+#include <std_msgs/Float64.h>
 #include <quadrotor_msgs/PolynomialTrajectory.h>
 #include <geometry_msgs/PoseStamped.h>
+#include <laser_geometry/laser_geometry.h>
 #include <visualization_msgs/MarkerArray.h>
 #include <visualization_msgs/Marker.h>
 #include <sensor_msgs/PointCloud.h>
@@ -29,7 +31,7 @@ class TrackingTrajectoryGenerator
 {
     // todo/issue:
     //  1. start from random position. (done)
-    //  2. command to track and stop.
+    //  2. command to track and stop. (waiting for the actual needs)
     //  3. keep a safe distance. (done)
     //  4. trajectory generation error code. (done)  
     //  5. observation uncertaninty. (done)
@@ -48,14 +50,52 @@ class TrackingTrajectoryGenerator
     //  18. orientation moment can not be taken into consider. (done by 20.)
     //  19. something wrong with the maintainness of the octree and graph. (done)
     //  20. replan disturbance. (done by using the desired state as initial state)
-    //  21. distance between target. ()
-    //  22. regeneration. ()
-    //  23. laser message. (done, to be test) 
-    //  24. tuning the parameter.
+    //  21. distance between target. (done)
+    //  22. regeneration. (maybe not, there has been cycle-time generation.)
+    //  23. laser message. (done, to be tested) 
+    //  24. tuning the parameter. (1) lambda (2) estimation degree (3) prediction time
+    //  25. penalty derivative on the estimation. (done with regulator)
+    //  26. move to mosek solver. (done, to be tested) 
+    //  27. bug of nan. (fixed)
+    //  28. more error code from the solver. (done)
+    //  29. advanced virtual commander. (done)
+    //  30. camera calibration plus tag! (producer done, receiver not yet)
+    //  31. incremental map visualization.
+    //  32. yaw angle control. (done)
+    //  33. bag with virual obstacle. (done)
+    //  34. only trust the estimation when we have enough observation. (done)
+    //  35. pop the old observation away. (done)
+
+public:
+    ///> the intialization!
+    TrackingTrajectoryGenerator(ros::NodeHandle & handle);
+
+    ///> callback function for receiving different messages 
+    void rcvCurrentOdometry(const nav_msgs::Odometry & odom);
+    void rcvTargetObservation(const geometry_msgs::PoseStamped & pose);
+    void rcvTagObservation(const geometry_msgs::PoseStamped & pose);
+    void rcvGlobalPointCloud(const sensor_msgs::PointCloud & cloud);
+    void rcvGlobalBlockCloud(const sensor_msgs::PointCloud & cloud);
+    void rcvLocalLaserScan(const sensor_msgs::LaserScan & scan);
+
+    ///> the delievery of resulting trajectory
+    void pubTrackingTrajectory();
+    ///> the visual data 
+    void pubVisualTargetTrajectory();
+    void pubVisualTargetCorridor();
+    void pubVisualMapGrids();
+    void pubVisualTrackingTrajectory();
+    void pubVisualTargetObservation();
+
+    ///> cycled actions
+    void regTrajectoryCallback(const ros::TimerEvent & evt);
+    void visMapCallback(const ros::TimerEvent & evt);  
 private:
 
-    uint32_t _traj_id = 1;
-    bool _flag_vis = true;
+    bool _is_simulation = true;
+
+    uint32_t _traj_id = 1; // trajectory id
+    bool _flag_vis = true; // switch of the visualization
 
     ///> io-channel
     ros::Subscriber _cmd_sub;
@@ -63,86 +103,81 @@ private:
     ros::Subscriber _blks_sub;  // map blocks cloud
     ros::Subscriber _pts_sub;   // map points cloud
     ros::Subscriber _obs_sub;   // the target observation
+    ros::Subscriber _tag_sub;
+    ros::Subscriber _scan_sub;
 
     ros::Publisher _traj_pub;   // flight trajectory 
+    ros::Publisher _yaw_pub;
     ros::Publisher _vis_est_pub; // visual target trajectory
-    ros::Publisher _vis_trk_pub; // visual 
-    ros::Publisher _vis_map_pub;
-    ros::Publisher _vis_crd_pub;
-    ros::Publisher _vis_obs_pub;
+    ros::Publisher _vis_trk_pub; // visual tracking trajectory
+    ros::Publisher _vis_map_pub; // visual map
+    ros::Publisher _vis_crd_pub; // visual corridor
+    ros::Publisher _vis_obs_pub; // visual target observation 
+    ros::Publisher _vis_pts_pub;
 
      ///> current innner states infomation
     nav_msgs::Odometry _odom;
-    size_t _odom_queue_size = 300;
-    deque<nav_msgs::Odometry> _odom_queue;
+    size_t _odom_queue_size = 300;                              // odometry queue size
+    deque<nav_msgs::Odometry> _odom_queue;                      // odometry queue for delayed observations
 
     ///> sub-module
   
     // info about the target trajectory estimation
     TrackingTrajectory::TrajectoryEstimator * _estimator = NULL;
 
-    deque<pair<double, Eigen::VectorXd> > _tgt_obs;
-    int _sz_tgt_obs = 200;
-    double _pdt_end = 5.0, _pdt_beg = 0.0;
-    int _n_dgr_est = 4;
-    visualization_msgs::MarkerArray _crd_msg;
+    deque<pair<double, Eigen::VectorXd> > _tgt_obs;             // observations
+    int _sz_tgt_obs = 200;                                      // observations size
+    double _pdt_end = 5.0, _pdt_beg = 0.0;                      // prediction time
+    int _n_dgr_est = 4;                                         // estimation traj order
+    visualization_msgs::MarkerArray _crd_msg;                   // corridor vis message
+    geometry_msgs::Pose _pose_cam_bd;
+    ros::Duration _cam_drt = ros::Duration(0.001);
+    ros::Time _cam_stp = ros::TIME_MIN;
+
+    int _obs_valid_num  = 20;
+    double _obs_rsv_drt = 5.0;
+    
+
+    bool is_fixed_height = true;
 
     // info about map
     VoxelTrajectory::OctoMap * _map = NULL;
 
     ros::Timer _vis_map_tmr; 
-    ros::Duration _vis_map_drt = ros::Duration(1.0);
-    vector<double> _vis_crd_rbga = {0.1, 0.0, 0.7, 0.1};
+    ros::Duration _vis_map_drt = ros::Duration(1.0);            // cycle time of visualizing map
+    vector<double> _vis_crd_rbga = {0.1, 0.0, 0.7, 0.1};        // color of visual corridor 
 
-    vector<double> _bdy {-100.0, 100.0, -100.0, 100.0, 0.0, 200.0};
-    double _map_resolution = 0.2 * 0.2 * 0.2;
-    double _safe_margin = 0.2;
+    vector<double> _bdy {-100.0, 100.0, -100.0, 100.0, 0.0, 200.0}; // boundary of the environment
+    double _map_resolution = 0.2 * 0.2 * 0.2;                       // map grid resolution
+    double _safe_margin = 0.2;                                      // safe margin adding to obstacle
 
     // laser message
-    double _laser_resolution = 0.1;
-    int _laser_count_thld = 3; 
-    double _laser_height_thld = 0.2;
-    double _laser_extra_height = 2.5;
-    ros::Duration _laser_drt = ros::Duration(0.5);
-    ros::Time _laser_stp = ros::TIME_MIN;
+    double _laser_resolution = 0.1;                                 // laser points resolution
+    int _laser_count_thld = 3;                                      // threshold filtering outliers in laser
+    double _laser_height_thld = 0.2;                                // threshold filtering ground points in laser
+    double _laser_extra_height = 2.5;                               // adding extra heigh to generate pillar(2D laser)
+    ros::Duration _laser_drt = ros::Duration(0.5);                  // cycle time of adding laser scan
+    ros::Time _laser_stp = ros::TIME_MIN;                           // last stamp of adding laser scan
 
     // info about the tracking trajectory generation
     VoxelTrajectory::TrajectoryGenerator * _generator = NULL;
-    VoxelTrajectory::TrajectoryGenerator::TrackingCorridorConfig _crd_config;
-    VoxelTrajectory::TrajectoryGenerator::TrajectoryConfig _traj_config;
+    VoxelTrajectory::TrajectoryGenerator::TrackingCorridorConfig _crd_config;   // config of corridor (for trajectory)
+    VoxelTrajectory::TrajectoryGenerator::TrajectoryConfig _traj_config;        // config of generated trajectory
 
-    ros::Timer _reg_traj_tmr;
-    ros::Duration _reg_traj_drt = ros::Duration(3.0);
+    ros::Timer _reg_traj_tmr;                                                   
+    ros::Duration _reg_traj_drt = ros::Duration(0.25);                           // cycletime of regenration
 
-    int _n_dgr_traj = 6, _n_dgr_min = 3;
-    double _max_vel = 1.0, _max_acc = 1.0;
-    double _flt_vel = 1.0, _flt_acc = 1.0;
-    Eigen::RowVectorXd _kp_dst;
+    int _n_dgr_traj = 6;                                        // degree of tracking traj
+    int _n_dgr_min = 3;                                         // degree of derivative to minimize
+    double _max_vel = 1.0, _max_acc = 1.0;                      // dynamic limitations
+    double _flt_vel = 1.0, _flt_acc = 1.0;                      // dynamic data for time allocation (not used for this traj)
+    Eigen::RowVectorXd _kp_dst;                                 // the distance vector to the target
 
     quadrotor_msgs::PolynomialTrajectory _traj_msg;
 
     ///> internal mechanism
     void _initMap();
 
-public:
-    ///>
-    TrackingTrajectoryGenerator(ros::NodeHandle & handle);
-
-    void rcvCurrentOdometry(const nav_msgs::Odometry & odom);
-    void rcvTargetObservation(const geometry_msgs::PoseStamped & pose);
-    void rcvGlobalPointCloud(const sensor_msgs::PointCloud & cloud);
-    void rcvGlobalBlockCloud(const sensor_msgs::PointCloud & cloud);
-    void rcvLocalLaserScan(const sensor_msgs::LaserScan & scan);
-
-    void pubTrackingTrajectory();
-    void pubVisualTargetTrajectory();
-    void pubVisualTargetCorridor();
-    void pubVisualMapGrids();
-    void pubVisualTrackingTrajectory();
-    void pubVisualTargetObservation();
-
-    void regTrajectoryCallback(const ros::TimerEvent & evt);
-    void visMapCallback(const ros::TimerEvent & evt);
 };
 
 int main(int argc, char ** argv)
@@ -181,9 +216,15 @@ TrackingTrajectoryGenerator::TrackingTrajectoryGenerator(ros::NodeHandle & crt_h
                 10, &TrackingTrajectoryGenerator::rcvGlobalPointCloud, this);
         _blks_sub = msg_handle.subscribe("obstacle_blocks",
                 10, &TrackingTrajectoryGenerator::rcvGlobalBlockCloud, this);
+        _tag_sub = msg_handle.subscribe("tag_pose_in_camera", 
+                10, &TrackingTrajectoryGenerator::rcvTagObservation, this);
+        _scan_sub = msg_handle.subscribe("laser_scan",
+                10, &TrackingTrajectoryGenerator::rcvLocalLaserScan, this);
 
         _traj_pub = msg_handle.advertise<quadrotor_msgs::PolynomialTrajectory>(
                 "flight_trajectory", 10);
+        _yaw_pub = msg_handle.advertise<std_msgs::Float64>(
+                "desired_yaw", 50);
         _vis_trk_pub = msg_handle.advertise<sensor_msgs::PointCloud>(
                 "visual_flight_trajectory", 10);
         _vis_est_pub = msg_handle.advertise<sensor_msgs::PointCloud>(
@@ -194,6 +235,8 @@ TrackingTrajectoryGenerator::TrackingTrajectoryGenerator(ros::NodeHandle & crt_h
                 "visual_map_grids", 10);
         _vis_obs_pub = msg_handle.advertise<sensor_msgs::PointCloud>(
                 "visual_target_observation", 10);
+        _vis_pts_pub = msg_handle.advertise<sensor_msgs::PointCloud>(
+                "visual_obstacle_points", 10);
     }
 
     { ///> load dynamic parameters
@@ -228,12 +271,14 @@ TrackingTrajectoryGenerator::TrackingTrajectoryGenerator(ros::NodeHandle & crt_h
     { ///> load basic setting;
 
         // duration of regenerating
+        param_handle.param("setting/is_simulation", _is_simulation, _is_simulation);
         double drt;
         param_handle.param("setting/regeneration_duration", drt, _reg_traj_drt.toSec());
         _reg_traj_drt = ros::Duration(drt);
         _reg_traj_tmr = crt_handle.createTimer(_reg_traj_drt, 
                 &TrackingTrajectoryGenerator::regTrajectoryCallback, this, false, true);
         vector<double> dst;
+        param_handle.param("setting/is_fixed_height", is_fixed_height, is_fixed_height);
         param_handle.getParam("setting/maintained_distance", dst);
         _kp_dst.resize(_TOT_DIM);
         _kp_dst(_DIM_X) = dst[_DIM_X];
@@ -241,19 +286,40 @@ TrackingTrajectoryGenerator::TrackingTrajectoryGenerator(ros::NodeHandle & crt_h
         _kp_dst(_DIM_Z) = dst[_DIM_Z];
 
         param_handle.param("setting/lambda", _crd_config.lambda, 0.01);
+        param_handle.param("setting/use_stop_policy", _crd_config.use_stop_policy, false);
 
         param_handle.param("setting/laser/resolution", _laser_resolution, _laser_resolution);
         param_handle.param("setting/laser/count_threshold", _laser_count_thld, _laser_count_thld);
-        param_handle.param("setting/laser/laser_height_thld", _laser_height_thld, _laser_height_thld);
+        param_handle.param("setting/laser/laser_height_threshold", _laser_height_thld, _laser_height_thld);
         param_handle.param("setting/laser/extra_height", _laser_extra_height, _laser_extra_height);
         param_handle.param("setting/laser/cycle_duration", drt, _laser_drt.toSec());
         _laser_drt = ros::Duration(drt);
 
+        // camera setting
+        vector<double> pos, ort;
+        param_handle.getParam("setting/camera/position", pos);
+        param_handle.getParam("setting/camera/orientation", ort);
+        param_handle.param("setting/camera/cycle_duration", drt, _cam_drt.toSec());
+        _pose_cam_bd.position.x = pos[_DIM_X];
+        _pose_cam_bd.position.y = pos[_DIM_Y];
+        _pose_cam_bd.position.z = pos[_DIM_Z];
+        _pose_cam_bd.orientation.w = ort[0]; 
+        _pose_cam_bd.orientation.x = ort[1]; 
+        _pose_cam_bd.orientation.y = ort[2]; 
+        _pose_cam_bd.orientation.z = ort[3]; 
+        _cam_drt = ros::Duration(drt);
+
         // the degree of estimatied trajectory
         param_handle.param("estimation/trajectory_degree", _n_dgr_est, _n_dgr_est);
         param_handle.param("estimation/observation_size", _sz_tgt_obs, _sz_tgt_obs);
+        param_handle.param("estimation/valid_size", _obs_valid_num, _obs_valid_num);
+        param_handle.param("estimation/reserved_duration", _obs_rsv_drt, _obs_rsv_drt);
         param_handle.param("estimation/predition_time", _pdt_end, _pdt_end);
+        double lambda = 0.01;
+        param_handle.param("estimation/lambda", lambda, lambda);
         _estimator = new TrackingTrajectory::TrajectoryEstimator(_n_dgr_est);
+        _estimator->setLambda(lambda);
+        _estimator->setPredictionTime(_pdt_end);
 
         // trajectory generator
         _generator = new VoxelTrajectory::TrajectoryGenerator;
@@ -271,13 +337,23 @@ TrackingTrajectoryGenerator::TrackingTrajectoryGenerator(ros::NodeHandle & crt_h
 
 void TrackingTrajectoryGenerator::rcvTargetObservation(const geometry_msgs::PoseStamped &pose)
 {
-    VectorXd pos(_TOT_DIM);
-    pos << 
-        pose.pose.position.x, 
-        pose.pose.position.y,
-        pose.pose.position.z;
-    _tgt_obs.push_back(make_pair(pose.header.stamp.toSec(), pos));
-    while ((int)_tgt_obs.size() > _sz_tgt_obs) _tgt_obs.pop_front();
+
+    {
+        std_msgs::Float64 yaw;
+        yaw.data = atan2(pose.pose.position.y - _odom.pose.pose.position.y , 
+                pose.pose.position.x - _odom.pose.pose.position.x);
+        _yaw_pub.publish(yaw);
+    }
+
+    {
+        VectorXd pos(_TOT_DIM);
+        pos << 
+            pose.pose.position.x, 
+            pose.pose.position.y,
+            pose.pose.position.z;
+        _tgt_obs.push_back(make_pair(pose.header.stamp.toSec(), pos));
+        while ((int)_tgt_obs.size() > _sz_tgt_obs) _tgt_obs.pop_front();
+    }
 }
 
 void TrackingTrajectoryGenerator::rcvCurrentOdometry(const nav_msgs::Odometry & odom)
@@ -286,6 +362,12 @@ void TrackingTrajectoryGenerator::rcvCurrentOdometry(const nav_msgs::Odometry & 
 
     _odom_queue.push_back(odom);
     while (_odom_queue.size() > _odom_queue_size) _odom_queue.pop_front();
+
+    if (!_is_simulation)
+    {
+        while (!_tgt_obs.empty() && 
+            _tgt_obs.front().first + _obs_rsv_drt < odom.header.stamp.toSec()) _tgt_obs.pop_front();
+    }
 }
 
 void TrackingTrajectoryGenerator::rcvGlobalPointCloud(const sensor_msgs::PointCloud & cloud)
@@ -301,18 +383,24 @@ void TrackingTrajectoryGenerator::rcvGlobalBlockCloud(const sensor_msgs::PointCl
 void TrackingTrajectoryGenerator::pubTrackingTrajectory()
 {
     {// estimation of the trajectory
+        if (_tgt_obs.size() < _obs_valid_num) return ;
         TrackingTrajectory::TargetObservation obs(_tgt_obs.begin(), _tgt_obs.end());
-        double beg_time = _odom.header.stamp.toSec();
+        if (obs.empty()) return ;
+
+        double beg_time = (_is_simulation) ? obs.back().first : _odom.header.stamp.toSec();
+
         for (auto & pr: obs) pr.first -= beg_time;
+        if (is_fixed_height) for (auto & pr: obs) pr.second(_DIM_Z) = 0.0;
         _crd_config.traj = _estimator->estimateTrajectory(obs);
         _crd_config.t_beg = _pdt_beg;
         _crd_config.t_end = _pdt_end;
 
-        //ROS_WARN("[TRK_TRAJ] obs size = %d, prediction time = %lf \n", _sz_tgt_obs, _pdt_end);
+        ROS_WARN("[TRK_TRAJ] obs size = %d, prediction time = %lf \n", _sz_tgt_obs, _pdt_end);
         this->pubVisualTargetTrajectory();
         this->pubVisualTargetObservation();
         _crd_config.traj.row(0) += _kp_dst;
     }
+    ROS_WARN_STREAM("[TRK_TRAJ] estimated traj:\n" << _crd_config.traj);
 
     ROS_WARN("[TRK_TRAJ] going to find the corridor");
     {// generation of the flight corridor
@@ -334,7 +422,7 @@ void TrackingTrajectoryGenerator::pubTrackingTrajectory()
             init_state << getStateFromTrajByTime(
                     _traj_config.coef,
                     _traj_config.time,
-                    (_odom.header.stamp - _traj_msg.header.stamp).toSec());
+                    (_odom.header.stamp - _traj_msg.header.stamp).toSec() + 0.03);
         }
         if (!_map->retPathFromTraj(
                     flt_crd, init_state.row(_STT_POS).transpose(), _crd_config.traj, _pdt_beg, _pdt_end))
@@ -343,9 +431,9 @@ void TrackingTrajectoryGenerator::pubTrackingTrajectory()
             return ;
         }
 
-        ROS_WARN_STREAM("\n[TRK_TRAJ]" << flt_crd.first.rows() << ", " << flt_crd.first.cols() 
-                << ", " << flt_crd.second.rows() << ", " << flt_crd.second.cols());
-        ROS_WARN_STREAM("\n grid :\n" << flt_crd.first << "\nface:\n" << flt_crd.second);
+       // ROS_WARN_STREAM("\n[TRK_TRAJ]" << flt_crd.first.rows() << ", " << flt_crd.first.cols() 
+       //         << ", " << flt_crd.second.rows() << ", " << flt_crd.second.cols());
+       // ROS_WARN_STREAM("\n grid :\n" << flt_crd.first << "\nface:\n" << flt_crd.second);
 
         ROS_WARN("[TRK_TRAJ] corridor found!");
         // get the segment number
@@ -354,14 +442,6 @@ void TrackingTrajectoryGenerator::pubTrackingTrajectory()
         // get the inital and final state
         _crd_config.init_state = init_state;
         _crd_config.dest_state = getStateFromTrajByTime(_crd_config.traj, _pdt_end);
-
-        // get the flight time
-        _crd_config.traj_time.reserve(_crd_config.M);
-        for (auto i = 0; i < _crd_config.M; ++i) 
-        {
-            _crd_config.traj_time.push_back(
-                    make_pair(flt_crd.first(i, _BDY_L_T), flt_crd.first(i, _BDY_R_T)));
-        }
 
         // load the corridor
         _crd_config.face = flt_crd.second;
@@ -373,7 +453,7 @@ void TrackingTrajectoryGenerator::pubTrackingTrajectory()
             _crd_config.dest_state.row(_STT_POS),
             _crd_config.uninflated_grid,
             _crd_config.face);
-        ROS_WARN_STREAM("[TRK_TRAJ] corridor inflated! \n" << _crd_config.grid);
+        //ROS_WARN_STREAM("[TRK_TRAJ] corridor inflated! \n" << _crd_config.grid);
 
         this->pubVisualTargetCorridor();
     }
@@ -468,24 +548,69 @@ void TrackingTrajectoryGenerator::rcvLocalLaserScan(const sensor_msgs::LaserScan
     if (scan.header.stamp - _laser_stp < _laser_drt) return ;
     _laser_stp = scan.header.stamp;
 
+    nav_msgs::Odometry laser_odom = _odom_queue.back();
     for (auto & odom: _odom_queue)
        if (odom.header.stamp > _laser_stp)
        {
-           auto blk = getStdVecFromLaserScan(scan, odom,
-                   _safe_margin, _laser_resolution, _laser_count_thld);
-           for (int idx = 0; idx < (int)blk.size(); idx += _TOT_BDY)
-           {
-               auto height = 0.5 * (blk[idx + _BDY_L_Z] + blk[idx + _BDY_R_Z]);
-               // if is near the ground, remove it
-               // otherwise, add extra height 
-               if (height < _laser_height_thld)
-               {
-                   blk[idx + _BDY_L_Z] = blk[idx + _BDY_R_Z] 
-                       = _bdy[_BDY_L_Z] - _laser_extra_height;
-               }else
-               {
-                   blk[_BDY_R_Z] += _laser_extra_height;
-               }
-           }
+           laser_odom = odom;
+           break;
        } 
+
+   auto blk = getStdVecFromLaserScan(scan, laser_odom,
+           _safe_margin, _laser_resolution, _laser_count_thld,
+           _laser_height_thld, _laser_extra_height);
+
+   {
+       sensor_msgs::PointCloud cloud;
+       laser_geometry::LaserProjection projector;
+       projector.projectLaser(scan, cloud);
+       cloud.header.frame_id = "/map";
+       Eigen::Quaterniond quad(
+               laser_odom.pose.pose.orientation.w,
+               laser_odom.pose.pose.orientation.x,
+               laser_odom.pose.pose.orientation.y,
+               laser_odom.pose.pose.orientation.z);
+       Eigen::Matrix3d rotate = quad.toRotationMatrix();
+       Eigen::Vector3d trans(
+               laser_odom.pose.pose.position.x,
+               laser_odom.pose.pose.position.y,
+               laser_odom.pose.pose.position.z);
+       for (auto & p : cloud.points)
+       {
+           Eigen::Vector3d pt(p.x, p.y, p.z);
+           pt = rotate * pt + trans;
+           p.x = pt(0);
+           p.y = pt(1);
+           p.z = pt(2);
+       }
+
+       _vis_pts_pub.publish(cloud);
+   }
+
+   _map->insertBlocks(blk);
+   ROS_WARN_STREAM("[LASER_SCAN] " << blk.size() / 6 << " points to be added");
+   this->pubVisualMapGrids();
+}
+
+void TrackingTrajectoryGenerator::rcvTagObservation(const geometry_msgs::PoseStamped & pose)
+{
+    if (_odom_queue.empty()) return ;
+    if (pose.header.stamp - _cam_stp < _cam_drt) return ;
+    _cam_stp = pose.header.stamp;
+
+    nav_msgs::Odometry cam_odom = _odom_queue.back();
+    for (auto & odom: _odom_queue)
+        if (odom.header.stamp > _cam_stp)
+        {
+            cam_odom = odom;
+            break;
+        }
+
+    Eigen::VectorXd pt = getWorldPositionFromCam(
+            pose.pose, _pose_cam_bd, cam_odom.pose.pose);
+
+    _tgt_obs.push_back(make_pair(_cam_stp.toSec(), pt));
+
+    while (!_tgt_obs.empty() && ((int)_tgt_obs.size() > _sz_tgt_obs))
+        _tgt_obs.pop_front();
 }

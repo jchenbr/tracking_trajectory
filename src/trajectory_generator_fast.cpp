@@ -25,6 +25,11 @@
 #include <ooqp/GondzioSolver.h>
 #include <ooqp/QpGenSparseMa27.h>
 
+#ifndef __cplusplus
+#define __Cplusplus
+#endif
+
+#include "mosek.h"
 
 #undef _USE_DEBUG_PRINT_
 
@@ -45,13 +50,15 @@ namespace VoxelTrajectory
     const static double _BEG_FIN_RELAX_RATE = 1.5;
     static int M;
     static double lambda = 0.01;
-
+    static bool use_stop_policy = true;
     const static int _BUFF_SIZE = 256;
     static char buffer[_BUFF_SIZE] = "\0";
 
     static double max_vel = 1.0, max_acc = 1.0;
     static double f_vel = 1.0, f_acc = 1.0;
     vector<double> _qp_cost;
+    static int _error_code = 0;
+    static int _solver_code =  0;
     
 
     using namespace Eigen;
@@ -1077,7 +1084,6 @@ namespace VoxelTrajectory
 
 #ifdef _TRAJECTORY_GENERATOR_FLAG_USE_SPARSE_
 
-static int _error_code = 0;
 
 /* Some unknown bugs here. */
 /* bug free now.
@@ -1235,6 +1241,382 @@ static int _error_code = 0;
         return D;
     }
 #endif
+
+       static VectorXd getDerivativesByOOQP(
+         const SMatrixXd & Q,
+         const VectorXd & C,
+         const SMatrixXd & A,
+         const VectorXd & B,
+         const VectorXi x_id,
+         const VectorXd x_lb,
+         const VectorXd x_ub)
+    {
+ #if 0
+        ROS_WARN_STREAM("Q:\n" << Q);
+        ROS_WARN_STREAM("C:\n" << C);
+        ROS_WARN_STREAM("A:\n" << A);
+        ROS_WARN_STREAM("b:\n" << B);
+        ROS_WARN_STREAM("x_id:\n" << x_id);
+        ROS_WARN_STREAM("x_lb:\n" << x_lb);
+        ROS_WARN_STREAM("x_ub:\n" << x_ub);
+#endif       
+        // number of variable
+        const int N_X  = Q.rows();
+
+        // linear cost 
+        double c[N_X];
+        for (int i = 0; i < N_X; i++) c[i] = C(i);
+
+        // upper bound 
+        double xupp[N_X];
+        char ixupp[N_X];
+        for (int i = 0 ; i < N_X; i++) xupp[i] = 0.0;
+        memset(ixupp, 0, sizeof(ixupp));
+
+        // lower bound
+        double xlow[N_X];    
+        char ixlow[N_X];
+        for (int i = 0; i < N_X; i++) xlow[i] = 0.0;
+        memset(ixlow, 0, sizeof(ixlow));
+
+        for (int idx = 0; idx < x_id.rows(); ++idx) 
+        {
+            int i = x_id[idx];
+            xupp[i] = x_ub[idx];
+            xlow[i] = x_lb[idx];
+            ixupp[i] = 1;
+            ixlow[i] = 1;
+        }
+
+
+        //clog<<"QP: Fine"<<endl;
+        vector<pair<pair<int, int>, double> > tmp;
+        // quadratic cost matrix
+        int N_Q = 0;
+
+        for (int k = 0; k < Q.outerSize(); ++k)
+            for (SMatrixXd::InnerIterator it(Q, k); it; ++it)
+            if (it.col() <= it.row()) //lower trianglur matrix
+            {
+                N_Q += 1;
+            }
+
+        int iQ[N_Q], jQ[N_Q], i_q = 0;
+        double dQ[N_Q];
+
+        tmp.resize(N_Q);
+        for (int k = 0; k < Q.outerSize(); ++k)
+            for (SMatrixXd::InnerIterator it(Q, k); it; ++it)
+                if (it.col() <= it.row())
+                {
+                    tmp[i_q++] = make_pair(make_pair(it.row(), it.col()), it.value());
+                }
+
+        sort(tmp.begin(), tmp.end());
+
+        for (int i = 0; i < tmp.size(); ++i)
+        {
+            iQ[i] = tmp[i].first.first;
+            jQ[i] = tmp[i].first.second;
+            dQ[i] = tmp[i].second;
+        }
+
+
+        // equality constraints
+        int N_CE = 0, N_CE_ROW = 0;
+        int iCE[N_CE], jCE[N_CE];
+        double dCE[N_CE], b[N_CE_ROW];
+
+        // inequality constraints
+        int N_CI = 0, N_CI_ROW = A.rows();
+
+        for (int k = 0; k < A.outerSize(); ++k)
+            for (SMatrixXd::InnerIterator it(A, k); it; ++it)
+            {
+                N_CI += 1;
+            }
+
+        int iCI[N_CI], jCI[N_CI];
+        char ilb[N_CI_ROW], iub[N_CI_ROW];
+        double dCI[N_CI], lb[N_CI_ROW], ub[N_CI_ROW];
+
+        int i_ci =0;
+
+        tmp.resize(N_CI);
+        for (int k = 0; k < A.outerSize(); ++k)
+            for (SMatrixXd::InnerIterator it(A, k); it; ++it)
+            {
+                tmp[i_ci++]=make_pair(make_pair(it.row(),it.col()),it.value());
+            }
+
+        sort(tmp.begin(), tmp.end());
+
+        for (int i = 0; i < (int)tmp.size(); ++i)
+        {
+            iCI[i] = tmp[i].first.first;
+            jCI[i] = tmp[i].first.second;
+            dCI[i] = tmp[i].second;
+        }
+
+        for (int i = 0; i < N_CI_ROW; ++i)
+        {
+            lb[i]   = 0;
+            ub[i]   = B(i);
+            ilb[i]  = 0;
+            iub[i]  = 1;
+        }
+
+        // qp solver
+        QpGenSparseMa27 * qp  =
+            new QpGenSparseMa27(N_X, N_CE_ROW, N_CI_ROW, N_Q, N_CE, N_CI);
+
+        QpGenData   * prob  = (QpGenData *) qp->copyDataFromSparseTriple(
+            c,      
+            iQ,     N_Q,    jQ,     dQ,
+            xlow,   ixlow,  xupp,   ixupp,  
+            iCE,    N_CE,   jCE,    dCE,    b,
+            iCI,    N_CI,   jCI,    dCI,    
+            lb,     ilb,    ub,     iub);
+
+        QpGenVars   * vars  = 
+            (QpGenVars *) qp->makeVariables(prob);
+
+        QpGenResiduals * resid  = 
+            (QpGenResiduals *) qp->makeResiduals(prob);
+
+        GondzioSolver   * s = new GondzioSolver(qp, prob);
+
+        //clog<<"Just Fine log - 0"<<endl;
+
+#ifdef _USE_DEBUG_PRINT_1
+        s->monitorSelf();
+#endif
+        int ierr    = s->solve(prob, vars, resid);
+        _solver_code = ierr;
+        //clog<<"Just Fine log - 1"<<endl;
+        delete s;
+        delete qp;
+
+        if (ierr == 0)
+        {
+            clog << "Successfully found the solution." << endl;
+        }else{
+            clog << "Something Wrong with the QP. ERR_CODE=" << ierr <<endl;
+        }
+
+        //clog<<"Just Fine log - 2"<<endl;
+        VectorXd D = VectorXd::Zero(N_X);
+        double d[N_X];
+        vars->x->copyIntoArray(d);
+        //clog<<"Just Fine log - 3"<<endl;
+        for (int i = 0; i < N_X; i++)
+            D(i) = d[i];
+
+        //clog<<"Just Fine log - 4"<<endl;
+        return D;
+    }
+
+    static void MSKAPI printStr(void * handle, MSKCONST char str[])
+    {}
+
+    static VectorXd getDerivativesByMosek(
+         const SMatrixXd & Q,
+         const VectorXd & C,
+         const SMatrixXd & A,
+         const VectorXd & b,
+         const VectorXi x_id,
+         const VectorXd x_lb,
+         const VectorXd x_ub)
+    {
+#if 0
+        ROS_WARN_STREAM("Q:\n" << Q);
+        ROS_WARN_STREAM("C:\n" << C);
+        ROS_WARN_STREAM("A:\n" << A);
+        ROS_WARN_STREAM("b:\n" << b);
+        ROS_WARN_STREAM("x_id:\n" << x_id);
+        ROS_WARN_STREAM("x_lb:\n" << x_lb);
+        ROS_WARN_STREAM("x_ub:\n" << x_ub);
+#endif
+        // the problem size
+        static int num_var;
+        static int num_con;
+        {
+            num_var = C.rows();
+            num_con = b.rows();
+        }
+
+        // linear part of the object
+        static vector<double> c;
+        {
+            c.resize(num_var);
+            for (int i = 0; i < num_var; ++i) c[i] = C(i);
+        }
+    
+        // quadratic part of the object
+        static vector<MSKint32t> qrow;
+        static vector<MSKint32t> qcol;
+        static vector<double> qval;
+        { // get the data
+            qrow.clear(); qrow.reserve(Q.nonZeros());
+            qcol.clear(); qcol.reserve(Q.nonZeros());
+            qval.clear(); qval.reserve(Q.nonZeros());
+            for (int i = 0; i < Q.outerSize(); ++i)
+                for (SMatrixXd::InnerIterator it(Q ,i); it; ++it)
+                {
+                    if (it.col() > it.row()) continue;
+                    qrow.push_back(it.row());
+                    qcol.push_back(it.col());
+                    qval.push_back(it.value());
+                }
+        }
+         
+        // variable range
+        static vector<MSKboundkeye> bkx;
+        static vector<double> blx;
+        static vector<double> bux;
+        {
+            bkx.resize(num_var, MSK_BK_FR);
+            blx.resize(num_var, 0.0);
+            bux.resize(num_var, 0.0);
+            for (int i = 0; i < x_id.cols(); ++i)
+            {
+                int idx = x_id(i);
+                bkx[idx] = MSK_BK_RA;
+                blx[idx] = x_lb(i);
+                bux[idx] = x_ub(i);
+            }
+        }
+
+
+        // constraints (only upper bound)
+        static vector<MSKboundkeye> bkc;
+        static vector<double> blc; 
+        static vector<double> buc;
+        static vector<vector<MSKint32t> > acol;
+        static vector<vector<double> > aval;
+        {
+            bkc.resize(num_con, MSK_BK_UP);
+            blc.resize(num_con, 0.0);
+            buc.resize(num_con, 0.0);
+            acol.resize(num_var);
+            aval.resize(num_var);
+            for (auto & col: acol) col.clear();
+            for (auto & col: aval) col.clear();
+
+            for (int i = 0; i < num_con; ++i) buc[i] = b[i];
+
+            for (int i = 0; i < A.outerSize(); ++i)
+                for (SMatrixXd::InnerIterator it(A, i); it; ++it)
+                {
+                    acol[it.col()].push_back(it.row());
+                    aval[it.col()].push_back(it.value());
+                }
+        }
+
+#if 0
+        ROS_WARN_STREAM("size : " << num_con << ", " << num_var);
+        for (int i = 0; i < qval.size(); i++)
+        {
+            ROS_WARN_STREAM("item : " << qrow[i] << " " << qcol[i] << " " << qval[i]);
+        }
+        for (int i = 0; i < num_var; ++i)
+        {
+            clog << "col " << i << " :";
+            for (auto j : acol[i]) clog << j << " ";
+            clog << endl;
+        }
+#endif
+        // execute the main body
+        VectorXd ret = VectorXd::Zero(num_var);
+        MSKrescodee r;
+        MSKenv_t env = NULL;
+        MSKtask_t task = NULL;
+        do
+        {
+            MSKint32t i, j;
+
+            if ((r = MSK_makeenv(&env, NULL)) != MSK_RES_OK) break;
+            if ((r = MSK_maketask(env, num_con, num_var, &task)) != MSK_RES_OK) break;
+            if ((r = MSK_linkfunctotaskstream(task, MSK_STREAM_LOG, NULL, printStr)) != MSK_RES_OK) break;
+            if ((r = MSK_appendcons(task, num_con)) != MSK_RES_OK) break;
+            if ((r = MSK_appendvars(task, num_var)) != MSK_RES_OK) break;
+            if ((r = MSK_putcfix(task, 0.0)) != MSK_RES_OK) break;
+
+            for (j = 0; j < num_var; ++j)
+            {
+                if ((r = MSK_putcj(task, j, c[j])) != MSK_RES_OK) break;
+                if ((r = MSK_putvarbound(task, j, bkx[j], blx[j], bux[j])) != MSK_RES_OK) break;
+                if ((r = MSK_putacol(task, j, acol[j].size(), acol[j].data(), aval[j].data()))
+                        != MSK_RES_OK) break;
+            }
+            if (r != MSK_RES_OK) break;
+
+            for (i = 0; i < num_con; ++i)
+            {
+                if ((r = MSK_putconbound(task, i, bkc[i], blc[i], buc[i])) != MSK_RES_OK) break;
+            }
+            if (r != MSK_RES_OK) break;
+
+            if ((r = MSK_putqobj(task, qval.size(), qrow.data(), qcol.data(), qval.data()))
+                    != MSK_RES_OK) break;
+
+            if ((r = MSK_optimizetrm(task, &r)) != MSK_RES_OK) break;
+            //if ((r = MSK_solutionsummary(task, MSK_STREAM_MSG)) != MSK_RES_OK) break;
+
+            MSKsolstae solsta;
+            if (MSK_getsolsta(task, MSK_SOL_ITR, &solsta) == MSK_RES_OK)
+            { 
+                switch(solsta)
+                {
+                    case MSK_SOL_STA_OPTIMAL:
+                    case MSK_SOL_STA_NEAR_OPTIMAL:
+                        double xx[num_var];
+                        if ((r = MSK_getxx(task, MSK_SOL_ITR, xx)) != MSK_RES_OK) break;
+                        ret << VectorXd::Map(xx, num_var);
+                        MSK_deletetask(&task);
+                        MSK_deleteenv(&env);
+                        ROS_WARN("[mosek] Optimal primal solution.");
+                        return ret;
+                        break;
+                    case MSK_SOL_STA_DUAL_INFEAS_CER:
+                    case MSK_SOL_STA_PRIM_INFEAS_CER:
+                    case MSK_SOL_STA_NEAR_DUAL_INFEAS_CER:
+                    case MSK_SOL_STA_NEAR_PRIM_INFEAS_CER:  
+                        ROS_WARN("[mosek] Primal or dual infeasibility certificate found.");
+                        MSK_deletetask(&task);
+                        MSK_deleteenv(&env);
+                        return ret;
+
+                        break;
+                  
+                    case MSK_SOL_STA_UNKNOWN:
+                        ROS_WARN("[mosek] The status of the solution could not be determined.");
+                        break;
+                    default:
+                        ROS_WARN("[mosek] Other solution status.");
+                        break;
+                }
+            }
+            else
+            {
+                ROS_WARN("[mosek] Error while optimizing.");
+            }
+        } while (false);
+
+        if (r != MSK_RES_OK)
+        {
+            static char symname[MSK_MAX_STR_LEN];
+            static char desc[MSK_MAX_STR_LEN];
+            ROS_WARN("[mosek] an error occured while opimizing.");
+            MSK_getcodedesc(r, symname, desc);
+            ROS_WARN("[mosek] Error %s - '%s'", symname, desc);
+        }
+        
+        MSK_deletetask(&task);
+        MSK_deleteenv(&env);
+        return ret;
+    }
+
 
     static VectorXd getCoeff(
         const double p_s,
@@ -1576,8 +1958,8 @@ static int _error_code = 0;
             return ret;
         };
         
-        ROS_WARN_STREAM(" M = " << config.M << endl << "face = " << face);
-        ROS_WARN_STREAM(" init = \n" << config.init_state << "\n dest = \n" << config.dest_state );
+        //ROS_WARN_STREAM(" M = " << config.M << endl << "face = " << face);
+       // ROS_WARN_STREAM(" init = \n" << config.init_state << "\n dest = \n" << config.dest_state );
 
         vector<double> len(config.M, 0.0);
         len.front() = (config.init_state.row(0).transpose() - 
@@ -1586,16 +1968,16 @@ static int _error_code = 0;
         len.back() = (getFaceCenter(config.M - 2) -
                 config.dest_state.row(0).transpose()).norm();
 
-        ROS_WARN("\n[segment length]");
-        for (auto &l : len) ROS_WARN("%lf", l);
+        //ROS_WARN("\n[segment length]");
+        //for (auto &l : len) ROS_WARN("%lf", l);
         
         for (int i = 1; i + 1 < config.M; ++i)
             len[i] = (getFaceCenter(i - 1) - getFaceCenter(i)).norm();
         double sum = 0.0;
         for (auto &l : len) sum += l;
         
-        ROS_WARN("\n[segment length]");
-        for (auto &l : len) ROS_WARN("%lf", l);
+        //ROS_WARN("\n[segment length]");
+        //for (auto &l : len) ROS_WARN("%lf", l);
 
         for (int i = 0; i < config.M; ++i) 
             ret[i] = t_beg + (t_end - t_beg) * len[i]/sum;
@@ -1682,7 +2064,7 @@ static int _error_code = 0;
         assert(dim >= 0 && dim <= _TOT_DIM);
 
         TrajectoryGenerator::DimensionConfig ret;
-        ret.traj_time = this->traj_time.front().first;
+        ret.traj_time = 0.0;
         ret.traj = this->traj.col(dim);
         ret.init_state = this->init_state.col(dim);
         ret.dest_state = this->dest_state.col(dim);
@@ -1831,10 +2213,31 @@ static int _error_code = 0;
         derLim[1] = max_acc * _LIM_RATE;
 
         // clog << "5. Let us do the main loop" << endl;
+#ifndef _USE_PREVIOUS_OOQP_SOLVER_
+        VectorXi x_id;
+        VectorXd x_lb, x_ub;
+        {
+            SMatrixXd A = CE_CI_1.second.first * RDD.transpose();
+            VectorXd b = CE_CI_1.second.second - CE_CI_1.second.first * RDF.transpose() * d_f;
+            x_id.resize(b.rows() >> 1);
+            x_lb.resize(b.rows() >> 1);
+            x_ub.resize(b.rows() >> 1);
+
+            for (int i = 0; i < A.outerSize(); ++i)
+                for (SMatrixXd::InnerIterator it(A, i); it; ++it)
+                {
+                    x_id(it.row() >> 1) = it.col();
+                    if (it.value() < 0)
+                        x_lb(it.row() >> 1) = -b(it.row());
+                    else
+                        x_ub(it.row() >> 1) = b(it.row());
+                }
+        }
+#endif
 
         for (int loop_v = 0; loop_v < _N_LOOP; ++loop_v)
         {
-
+#ifdef _USE_PREVIOUS_OOQP_SOLVER_
             // the inequality constraints
             SMatrixXd A_d;
             VectorXd b_d;
@@ -1850,39 +2253,54 @@ static int _error_code = 0;
                 A_d = ci * RDD.transpose();
                 b_d = ci_b - (ci * RDF.transpose() * d_f);
             }
-            // clog << "6. Inequality done." << endl;
 
 
-            // clog << "n_d = " << n_d << endl;
-            // clog << "n_f = " << n_f << endl;
-
-            // printSM(H_DD);
-            // printSM(H_FD);
-            // clog << "c = " << endl << (d_f.transpose() * H_FD) << endl;
-            // printSM(A_d);
-            // clog << "b_d" << endl << b_d.transpose() << endl; 
             VectorXd d_d(n_d);
             if (n_d > 0)
             {
                 d_d   = getPolyDer(Q_DD, d_f.transpose() * Q_FD + c.transpose(), make_pair(A_d, b_d));
             }
+#else // the code use mosek
+            SMatrixXd A_d;
+            VectorXd b_d;
+            {
+                auto ci = combineRowsSM(CI_3.first, CI_4.first) * IP2D * D2D.transpose();
+                VectorXd ci_b(CI_3.second.rows() + CI_4.second.rows());
+                ci_b << CI_3.second, CI_4.second;
+
+                A_d = ci * RDD.transpose();
+                b_d = ci_b - ci * RDF.transpose() * d_f; 
+            }
+
+            VectorXd d_d;
+            if (n_d > 0)
+            {
+#if 0
+                d_d = getDerivativesByMosek(Q_DD, d_f.transpose() * Q_FD + c.transpose(), 
+                        A_d, b_d, x_id, x_lb, x_ub);
+#else
+                d_d = getDerivativesByOOQP(Q_DD, d_f.transpose() * Q_FD + c.transpose(), 
+                        A_d, b_d, x_id, x_lb, x_ub);
+#endif
+            }
+#endif
     
-            //clog << "d_d = " << d_d.transpose() << endl;
             VectorXd d_all((M + 1) * R);
             d_all << d_d, d_f;
-            // clog << "d_all = " << d_all.transpose() << endl;
             D = D2D.transpose() * RD.transpose() * d_all;
 
-            // clog << "8.1 derivatives." << endl;
             P   = IP2D * D;
             COST = P.transpose() * Q * P;
-            //clog<<"P:\n"<<P<<endl;
-            //clog<<"D:\n"<<D<<endl;
-            
+           
+            if (_solver_code)
+            {
+                _error_code  = _solver_code;
+                return P;
+            }
+
             ex          = getExtremums(P, 1);
             derEx[0]    = getExtremums(P, 2);
             derEx[1]    = getExtremums(P, 3);
-
 
             //clog << "8. ex." << endl;
             if (!_CHECK_EX) 
@@ -1913,12 +2331,13 @@ static int _error_code = 0;
         
         TrajectoryGenerator::TrajectoryConfig ret;
 
-        ROS_WARN("[TRAJ_GEN] 0. enter the function ");
+        //ROS_WARN("[TRAJ_GEN] 0. enter the function ");
         M = config.M;
         lambda = config.lambda;
+        use_stop_policy = config.use_stop_policy;
         ret.time = config.time = getTimeAllocation(config);
         // for (auto &pr: config.traj_time) ROS_WARN_STREAM("pr -> " << pr.first << ", " << pr.second);
-        ROS_WARN_STREAM("[TRAJ_GEN] T: " << ret.time.transpose());
+        //ROS_WARN_STREAM("[TRAJ_GEN] T: " << ret.time.transpose());
         // ROS_WARN_STREAM("!! T_ori = " << config.traj_time.back().second - config.traj_time.front().first << "\n T =" << config.time.sum());
         max_vel = config.max_vel;
         max_acc = config.max_acc;

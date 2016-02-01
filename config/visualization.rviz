@@ -14,10 +14,9 @@ Panels:
       Expanded:
         - /Global Options1
         - /Basic1/Grid1
-        - /target1
+        - /target1/UKF Odom1
         - /tracker1
-        - /tracker1/flight_trajectory1
-        - /tracker1/observed_position1
+        - /tracker1/map_grids1
       Splitter Ratio: 0.5
     Tree Height: 581
   - Class: rviz/Views
@@ -63,10 +62,10 @@ Visualization Manager:
           Displays:
             - Class: rviz/Marker
               Enabled: true
-              Marker Topic: /target/odom_visualization_ukf/robot
+              Marker Topic: /odom_visualization_ukf/robot
               Name: Robot UKF
               Namespaces:
-                mesh: true
+                {}
               Queue Size: 100
               Value: true
             - Alpha: 1
@@ -81,14 +80,14 @@ Visualization Manager:
               Shaft Length: 1
               Shaft Radius: 0.05
               Shape: Axes
-              Topic: /target/odom_visualization_ukf/pose
+              Topic: /odom_visualization_ukf/pose
               Value: true
             - Class: rviz/Marker
               Enabled: true
-              Marker Topic: /target/odom_visualization_ukf/velocity
+              Marker Topic: /odom_visualization_ukf/velocity
               Name: Velocity UKF
               Namespaces:
-                velocity: true
+                {}
               Queue Size: 100
               Value: true
             - Alpha: 1
@@ -217,14 +216,14 @@ Visualization Manager:
         - Alpha: 0.1
           Autocompute Intensity Bounds: true
           Autocompute Value Bounds:
-            Max Value: 10
-            Min Value: -10
+            Max Value: 5.70312
+            Min Value: -0.078125
             Value: true
           Axis: Z
           Channel Name: intensity
           Class: rviz/PointCloud
           Color: 255; 255; 255
-          Color Transformer: FlatColor
+          Color Transformer: AxisColor
           Decay Time: 0
           Enabled: true
           Invert Rainbow: false
@@ -238,7 +237,7 @@ Visualization Manager:
           Selectable: true
           Size (Pixels): 3
           Size (m): 0.16
-          Style: Boxes
+          Style: Points
           Topic: /tracker/trajectory/visualization/map_grids
           Use Fixed Frame: true
           Use rainbow: true
@@ -277,7 +276,7 @@ Visualization Manager:
           Marker Topic: /tracker/trajectory/visualization/flight_corridor
           Name: corridor
           Namespaces:
-            tracking_trajectory/corridor: true
+            {}
           Queue Size: 100
           Value: true
         - Alpha: 1
@@ -367,6 +366,35 @@ Visualization Manager:
           Name: UKF Odom
       Enabled: true
       Name: tracker
+    - Alpha: 1
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 10
+        Min Value: -10
+        Value: true
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz/PointCloud
+      Color: 255; 255; 255
+      Color Transformer: Intensity
+      Decay Time: 0
+      Enabled: true
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Max Intensity: 1335
+      Min Color: 0; 0; 0
+      Min Intensity: 197
+      Name: PointCloud
+      Position Transformer: XYZ
+      Queue Size: 10
+      Selectable: true
+      Size (Pixels): 3
+      Size (m): 0.01
+      Style: Points
+      Topic: /tracker/trajectory/trajectory_generator/visual_obstacle_points
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 61; 61; 61
@@ -383,7 +411,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 46.8178
+      Distance: 68.4916
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.06
         Stereo Focal Distance: 1
@@ -395,10 +423,10 @@ Visualization Manager:
         Z: -22.1907
       Name: Current View
       Near Clip Distance: 0.01
-      Pitch: 1.2348
+      Pitch: 1.0148
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 6.25506
+      Yaw: 5.88505
     Saved: ~
 Window Geometry:
   Displays:

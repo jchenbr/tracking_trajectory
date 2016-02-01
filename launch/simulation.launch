@@ -19,7 +19,7 @@
                         lower_z : 0.0
                         upper_z : 40.0
                     forest :
-                        number : 40
+                        number : 80
                         stem :
                             height :
                                 mean : 7
@@ -114,7 +114,7 @@
                 uncertainty :
                     position :
                         mean : 0.0
-                        variance  : 0.001 
+                        variance  : 0.01 
             </rosparam>
             
             <remap from = "~target_odometry" to = "/target/odometry"/>
@@ -156,9 +156,10 @@
                 upper_y : 20.0
                 lower_z : 0.0
                 upper_z : 5.0
+            check_points_path : '/target/trajectory/check_points'
         </rosparam>
         
-        <remap from = "~waypoints" to = "/target/waypoints"/> 
+        <remap from = "~waypoints" to = "/target/waypointss"/> 
     </node>   
 
 

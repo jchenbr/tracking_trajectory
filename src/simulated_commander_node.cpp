@@ -3,6 +3,7 @@
 #include <geometry_msgs/Point32.h>
 #include <nav_msgs/Path.h>
 #include <random>
+#include "voxel_trajectory/CheckObstacleByPoints.h"
 using namespace std;
 
 class SimulatedCommander
@@ -14,6 +15,8 @@ private:
 
     ros::Publisher _cmd_pub;
     ros::Timer _cmd_tmr;
+    ros::ServiceClient _obs_clt;
+    voxel_trajectory::CheckObstacleByPoints _obs_srv;
     
     std::default_random_engine _generator;
     std::uniform_real_distribution<double> _dsb_x, _dsb_y, _dsb_z;
@@ -50,8 +53,13 @@ public:
         _cmd_pub = handle.advertise<nav_msgs::Path>(
                 "waypoints", 10);
         _cmd_tmr = handle.createTimer(_cmd_drt, &SimulatedCommander::pubCommand, this);
-        
-        _delay.sleep();
+        string str;
+        handle.getParam("check_points_path", str);
+        _obs_clt = handle.serviceClient<voxel_trajectory::CheckObstacleByPoints>(str);
+        _obs_srv.request.size = 1;
+        _obs_srv.request.x.resize(1);
+        _obs_srv.request.y.resize(1);
+        _obs_srv.request.z.resize(1);
     }
 
     void pubCommand(const ros::TimerEvent &evt)
@@ -60,13 +68,27 @@ public:
         wp.header.frame_id = "/map";
         wp.header.stamp = ros::Time::now();
 
+
         geometry_msgs::PoseStamped pose;
         pose.header = wp.header;
-        pose.pose.position.x = _dsb_x(_generator);
-        pose.pose.position.y = _dsb_y(_generator);
-        pose.pose.position.y = _dsb_z(_generator);
         pose.pose.orientation.w = 1.0;
+        do{
+            pose.pose.position.x = _dsb_x(_generator);
+            pose.pose.position.y = _dsb_y(_generator);
+            pose.pose.position.y = _dsb_z(_generator);
+
+            _obs_srv.request.x[0] = pose.pose.position.x; 
+            _obs_srv.request.y[0] = pose.pose.position.y; 
+            _obs_srv.request.z[0] = pose.pose.position.z; 
+            _obs_clt.call(_obs_srv);
+
+            ROS_WARN_STREAM("[ccccccccccccccccccccccommander]" << 
+                    pose.pose.position.x << ", " <<
+                    pose.pose.position.y << ", " <<
+                    pose.pose.position.z << ", = " << (int)_obs_srv.response.is_occupied[0]);
+        } while (_obs_srv.response.is_occupied.front());
         
+
         wp.poses.push_back(pose);
 
         _cmd_pub.publish(wp);

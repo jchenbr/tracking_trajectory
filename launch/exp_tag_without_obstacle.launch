@@ -1,0 +1,131 @@
+<launch>
+
+    <group ns = "environment" clear_params = "true">
+        <node 
+            pkg     = "tracking_trajectory"
+            type    = "obstacle_generator_node"
+            name    = "obstacle_generator"
+            output  = "log">
+
+            <rosparam>
+                delay : 5.0
+                obstacle :
+                    boundary :
+                        lower_x : -20.0
+                        upper_x : 20.0
+                        lower_y : -20.0
+                        upper_y : 20.0
+                        lower_z : 0.0
+                        upper_z : 40.0
+                    forest :
+                        number : 40
+                        stem :
+                            height :
+                                mean : 7
+                                variance : 1
+                            radius :
+                                mean : 0.3
+                                variance : 0.5
+                        top :
+                            height :
+                                mean : 0.1
+                                variance : 0.1
+                            radius :
+                                mean : 0.1
+                                variance : 0.1
+            </rosparam>
+            <!-- subscribed topics -->
+            <remap from = "~obstcle_type" to = "obstacle_type"/>
+
+            <!-- published topics -->
+            <remap from = "~obstacle_blocks" to = "obstacle_blocks"/>
+        </node>
+    </group>
+    
+    <group ns = "tracker" clear_params = "true">
+        <include ns = "quadrotor" file = "$(find tracking_trajectory)/launch/simulated_quadrotor.launch">
+            <arg name = "odometry_path" value = "/tracker/odometry"/>
+            <arg name = "position_cmd_path" value = "/tracker/position_cmd"/>
+        </include>
+        
+        
+        <include ns = "trajectory" file = "$(find tracking_trajectory)/launch/tracking_trajectory_generator.launch">
+            <arg name = "observation_path" value = "/tracker/observation"/>
+            <arg name = "odometry_path" value = "/tracker/odometry"/>
+            <arg name = "obstacle_points_path" value = "/environment/obstacle_points"/>
+            <arg name = "obstacle_blocks_path" value = "/environment/obstacle_blocks"/>
+            <arg name = "position_cmd_path" value = "/tracker/position_cmd"/>
+        </include>
+        
+        <!-- Visualization -->
+        <node pkg="odom_visualization"
+            name="odom_visualization_ukf"
+            type="odom_visualization"       
+            output="screen">
+            
+            <rosparam>
+                color :
+                    a : 0.8
+                    r : 0.0
+                    g : 1.0
+                    b : 0.0
+                covariance_scale : 100.0
+            </rosparam>  
+            <remap from= "~odom" to = "/tracker/odometry"/>
+        </node>
+    </group>
+
+    <node 
+        pkg = "tracking_trajectory"
+        type = "tag_detector_node"
+        name = "tag_detector"
+        output = "screen">
+        
+        <param name="camera_calibration_file" type="string" value="$(find tracking_trajectory)/config/camera.yml"/> 
+        <rosparam>
+            tag_id : 605
+            marker_size : 0.274
+            
+            odom_queue_size : 300
+            
+            camera_position :
+                - 0.074
+                - 0.102
+                - 0.100
+            camera_orientation :
+                - -0.5
+                - 0.5
+                - -0.5
+                - 0.5
+        </rosparam>
+        
+        <remap from = "~camera_image" to = "/bluefox2/image"/> 
+        <remap from = "~odometry" to = "/odom"/>
+        <remap from = "~tag_pose" to = "/tracker/observation"/>
+    </node>
+    
+     <node pkg="odom_visualization"
+            name="odom_visualization_ukf"
+            type="odom_visualization"       
+            output="screen">
+            
+            <rosparam>
+                color :
+                    a : 0.8
+                    r : 0.0
+                    g : 0.0
+                    b : 1.0
+                covariance_scale : 100.0
+            </rosparam>  
+            <remap from= "~odom" to = "/odom"/>
+        </node>
+
+    <node 
+        name = "rviz" 
+        pkg = "rviz" 
+        type = "rviz" 
+        output = "screen"
+        respawn = "true"
+        args="-d $(find tracking_trajectory)/config/visualization.rviz"/>     
+
+</launch>

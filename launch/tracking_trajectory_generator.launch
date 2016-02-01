@@ -5,6 +5,8 @@
     <arg name = "obstacle_points_path"/>
     <arg name = "obstacle_blocks_path"/>
     <arg name = "position_cmd_path"/>
+    <arg name = "laser_scan_path" default = "/scan"/>
+    <arg name = "is_simulation" default = "true"/>
 
     <node
         pkg = "tracking_trajectory"
@@ -14,15 +16,18 @@
         
         <rosparam command = "load"
             file = "$(find tracking_trajectory)/config/tracking_trajectory_generator.yaml"/>
+        <param name = "~setting/is_simulation" value = "$(arg is_simulation)"/>
         
         <!-- subscribed topics -->
         <remap from = "~odometry" to = "$(arg odometry_path)"/>
         <remap from = "~target_observation" to = "$(arg observation_path)"/>
         <remap from = "~obstacle_points" to = "$(arg obstacle_points_path)"/>
         <remap from = "~obstacle_blocks" to = "$(arg obstacle_blocks_path)"/>
+        <remap from = "~laser_scan" to = "$(arg laser_scan_path)"/>
         
         <!-- advertised topcis -->
         <remap from = "~flight_trajectory" to = "~trajectory"/>
+        <remap from = "~desired_yaw" to = "~desired_yaw"/>
         
         <!-- visualization topcis -->
         <remap from = "~visual_flight_trajectory" to = "visualization/flight_trajectory"/>
@@ -32,8 +37,8 @@
    </node>
    
    <node
-        pkg     = "voxel_trajectory"
-        type    = "grid_trajectory_server_node"
+        pkg     = "tracking_trajectory"
+        type    = "tracking_trajectory_server_node"
         output  = "screen"
         name    = "trajectory_server">
         
@@ -44,5 +49,6 @@
         
         <!-- advertised topics -->
         <remap  from = "~position_command"  to = "$(arg position_cmd_path)"/>
+        <remap  from = "~yaw" to = "trajectory_generator/desired_yaw"/>
     </node>
 </launch>
