@@ -9,7 +9,6 @@
 #include <std_msgs/Float64.h>
 #include <quadrotor_msgs/PolynomialTrajectory.h>
 #include <geometry_msgs/PoseStamped.h>
-#include <laser_geometry/laser_geometry.h>
 #include <visualization_msgs/MarkerArray.h>
 #include <visualization_msgs/Marker.h>
 #include <sensor_msgs/PointCloud.h>
@@ -104,7 +103,6 @@ private:
     ros::Subscriber _pts_sub;   // map points cloud
     ros::Subscriber _obs_sub;   // the target observation
     ros::Subscriber _tag_sub;
-    ros::Subscriber _scan_sub;
 
     ros::Publisher _traj_pub;   // flight trajectory 
     ros::Publisher _yaw_pub;
@@ -113,7 +111,6 @@ private:
     ros::Publisher _vis_map_pub; // visual map
     ros::Publisher _vis_crd_pub; // visual corridor
     ros::Publisher _vis_obs_pub; // visual target observation 
-    ros::Publisher _vis_pts_pub;
 
      ///> current innner states infomation
     nav_msgs::Odometry _odom;
@@ -218,8 +215,6 @@ TrackingTrajectoryGenerator::TrackingTrajectoryGenerator(ros::NodeHandle & crt_h
                 10, &TrackingTrajectoryGenerator::rcvGlobalBlockCloud, this);
         _tag_sub = msg_handle.subscribe("tag_pose_in_camera", 
                 10, &TrackingTrajectoryGenerator::rcvTagObservation, this);
-        _scan_sub = msg_handle.subscribe("laser_scan",
-                10, &TrackingTrajectoryGenerator::rcvLocalLaserScan, this);
 
         _traj_pub = msg_handle.advertise<quadrotor_msgs::PolynomialTrajectory>(
                 "flight_trajectory", 10);
@@ -235,8 +230,6 @@ TrackingTrajectoryGenerator::TrackingTrajectoryGenerator(ros::NodeHandle & crt_h
                 "visual_map_grids", 10);
         _vis_obs_pub = msg_handle.advertise<sensor_msgs::PointCloud>(
                 "visual_target_observation", 10);
-        _vis_pts_pub = msg_handle.advertise<sensor_msgs::PointCloud>(
-                "visual_obstacle_points", 10);
     }
 
     { ///> load dynamic parameters
@@ -424,6 +417,7 @@ void TrackingTrajectoryGenerator::pubTrackingTrajectory()
                     _traj_config.time,
                     (_odom.header.stamp - _traj_msg.header.stamp).toSec() + 0.03);
         }
+        ROS_WARN("\n[Flight Corridor] inilization done.");
         if (!_map->retPathFromTraj(
                     flt_crd, init_state.row(_STT_POS).transpose(), _crd_config.traj, _pdt_beg, _pdt_end))
         {
@@ -560,36 +554,7 @@ void TrackingTrajectoryGenerator::rcvLocalLaserScan(const sensor_msgs::LaserScan
            _safe_margin, _laser_resolution, _laser_count_thld,
            _laser_height_thld, _laser_extra_height);
 
-   {
-       sensor_msgs::PointCloud cloud;
-       laser_geometry::LaserProjection projector;
-       projector.projectLaser(scan, cloud);
-       cloud.header.frame_id = "/map";
-       Eigen::Quaterniond quad(
-               laser_odom.pose.pose.orientation.w,
-               laser_odom.pose.pose.orientation.x,
-               laser_odom.pose.pose.orientation.y,
-               laser_odom.pose.pose.orientation.z);
-       Eigen::Matrix3d rotate = quad.toRotationMatrix();
-       Eigen::Vector3d trans(
-               laser_odom.pose.pose.position.x,
-               laser_odom.pose.pose.position.y,
-               laser_odom.pose.pose.position.z);
-       for (auto & p : cloud.points)
-       {
-           Eigen::Vector3d pt(p.x, p.y, p.z);
-           pt = rotate * pt + trans;
-           p.x = pt(0);
-           p.y = pt(1);
-           p.z = pt(2);
-       }
-
-       _vis_pts_pub.publish(cloud);
-   }
-
    _map->insertBlocks(blk);
-   ROS_WARN_STREAM("[LASER_SCAN] " << blk.size() / 6 << " points to be added");
-   this->pubVisualMapGrids();
 }
 
 void TrackingTrajectoryGenerator::rcvTagObservation(const geometry_msgs::PoseStamped & pose)

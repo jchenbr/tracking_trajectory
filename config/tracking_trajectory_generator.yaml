@@ -56,8 +56,8 @@ estimation :
     valid_size : 20
     trajectory_degree : 6
     observation_size : 40
-    predition_time : 7
-    lambda : 1.0
+    predition_time : 10
+    lambda : 0.01
 
 
 #

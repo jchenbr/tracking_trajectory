@@ -29,7 +29,7 @@
 #define __Cplusplus
 #endif
 
-#include "mosek.h"
+//#include "mosek.h"
 
 #undef _USE_DEBUG_PRINT_
 
@@ -1416,6 +1416,7 @@ namespace VoxelTrajectory
         return D;
     }
 
+#if 0
     static void MSKAPI printStr(void * handle, MSKCONST char str[])
     {}
 
@@ -1616,6 +1617,7 @@ namespace VoxelTrajectory
         MSK_deleteenv(&env);
         return ret;
     }
+#endif
 
 
     static VectorXd getCoeff(

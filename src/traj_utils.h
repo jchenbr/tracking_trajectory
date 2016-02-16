@@ -402,9 +402,9 @@ Eigen::MatrixXd getStateFromTrajByTime(
                 T *= t;
             }
 #else
-            ROS_WARN_STREAM("[fuck it] " << n << ", " << m);
+            ROS_WARN_STREAM("[get state] " << n << ", " << m);
             Eigen::MatrixXd T = MatrixXd::Zero(3, n);
-            ROS_WARN_STREAM("[fuck it] " << n << ", " << m);
+            ROS_WARN_STREAM("[get state] " << n << ", " << m);
             VectorXd cum_t(n);
             cum_t(0) = 1.0;
             for (int j = 1; j < n; ++j) cum_t(j) = cum_t(j - 1) * t;

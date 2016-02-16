@@ -11,12 +11,12 @@
                 delay : 5.0
                 obstacle :
                     boundary :
-                        lower_x : -20.0
-                        upper_x : 20.0
-                        lower_y : -20.0
-                        upper_y : 20.0
+                        lower_x : -10.0
+                        upper_x : 10.0
+                        lower_y : -10.0
+                        upper_y : 10.0
                         lower_z : 0.0
-                        upper_z : 40.0
+                        upper_z : 20.0
                     forest :
                         number : 40
                         stem :
@@ -24,15 +24,15 @@
                                 mean : 7
                                 variance : 1
                             radius :
-                                mean : 0.3
-                                variance : 0.5
+                                mean : 0.1
+                                variance : 0.02
                         top :
                             height :
                                 mean : 0.1
                                 variance : 0.1
                             radius :
                                 mean : 0.1
-                                variance : 0.1
+                                variance : 0.02
             </rosparam>
             <!-- subscribed topics -->
             <remap from = "~obstcle_type" to = "obstacle_type"/>
