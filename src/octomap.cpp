@@ -29,7 +29,8 @@ namespace VoxelTrajectory
 
     OctoMap::Node::Node(const double bdy[_TOT_BDY], const int son[_TOT_CHD], int id, int tag)
     {
-        assert(_TAG_NUL <= tag  && tag < _TAG_TAL);
+        assert(_TAG_NUL <= tag);
+        assert(tag < _TAG_TAL);
 
         this->id    = id;
 
@@ -788,7 +789,8 @@ namespace VoxelTrajectory
                 const vector<double> & src, 
                 const vector<double> & dest)
     {
-        assert(src.size() % _TOT_DIM == 0 && ! src.empty());
+        assert(src.size() % _TOT_DIM == 0);
+        assert(!src.empty());
         assert((int)dest.size() == _TOT_DIM);
         int n = src.size() / _TOT_DIM;
         auto _EMPTY = make_pair(Eigen::MatrixXd(0, 0), Eigen::MatrixXd(0, 0));
@@ -1403,6 +1405,8 @@ namespace VoxelTrajectory
                     auto ctr = getGridCenter(*it);
                     dst.insert(dst.end(), ctr.begin(), ctr.end());
                 }
+
+                if (dst.empty()) return false;
 
                 // get the corridor
                 auto _path = getPathMultiStart(dst, pos);

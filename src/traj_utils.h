@@ -16,6 +16,7 @@
 #include <geometry_msgs/PoseStamped.h>
 #include <laser_geometry/laser_geometry.h>
 #include <eigen3/Eigen/Dense>
+#include <assert.h>
 using namespace std;
 using namespace Eigen;
 using namespace TrackingTrajectory;
@@ -358,6 +359,7 @@ Eigen::MatrixXd getStateFromTrajByTime(
         const Eigen::MatrixXd & coef,
         double t)
 {
+    assert(coef.cols() == TOT_DIM);
     MatrixXd ret = MatrixXd::Zero(3, 3);
     double T = 1.0;
     int n = coef.rows();
@@ -378,6 +380,8 @@ Eigen::MatrixXd getStateFromTrajByTime(
         const Eigen::VectorXd & time,
         double t)
 {
+    assert(time.rows() > 0 && coef.rows() > 0);
+    assert(coef.cols() == _TOT_DIM);
     int m = time.rows(), n = coef.rows() / m;
     t = min(t, time.sum());
     t = max(0.0, t);
@@ -402,9 +406,9 @@ Eigen::MatrixXd getStateFromTrajByTime(
                 T *= t;
             }
 #else
-            ROS_WARN_STREAM("[get state] " << n << ", " << m);
+            //ROS_WARN_STREAM("[get state] " << n << ", " << m);
             Eigen::MatrixXd T = MatrixXd::Zero(3, n);
-            ROS_WARN_STREAM("[get state] " << n << ", " << m);
+            //ROS_WARN_STREAM("[get state] " << n << ", " << m);
             VectorXd cum_t(n);
             cum_t(0) = 1.0;
             for (int j = 1; j < n; ++j) cum_t(j) = cum_t(j - 1) * t;

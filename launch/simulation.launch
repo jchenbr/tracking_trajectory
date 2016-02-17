@@ -19,7 +19,7 @@
                         lower_z : 0.0
                         upper_z : 40.0
                     forest :
-                        number : 80
+                        number : 180
                         stem :
                             height :
                                 mean : 7
@@ -29,11 +29,11 @@
                                 variance : 0.5
                         top :
                             height :
-                                mean : 0.1
-                                variance : 0.1
+                                mean : 0.0
+                                variance : 0.0
                             radius :
-                                mean : 0.1
-                                variance : 0.1
+                                mean : 0.0
+                                variance : 0.0
             </rosparam>
             <!-- subscribed topics -->
             <remap from = "~obstcle_type" to = "obstacle_type"/>
@@ -47,6 +47,7 @@
         <include ns = "quadrotor" file = "$(find tracking_trajectory)/launch/simulated_quadrotor.launch">
             <arg name = "odometry_path" value = "/target/odometry"/>
             <arg name = "position_cmd_path" value = "/target/position_cmd"/>
+            <arg name = "initial_position" value = "[0.0, 0.0, 0.0]"/>
         </include>
 
         <include ns = "trajectory" file = "$(find tracking_trajectory)/launch/waypoints_trajectory_generator.launch">
@@ -92,6 +93,7 @@
         <include ns = "quadrotor" file = "$(find tracking_trajectory)/launch/simulated_quadrotor.launch">
             <arg name = "odometry_path" value = "/tracker/odometry"/>
             <arg name = "position_cmd_path" value = "/tracker/position_cmd"/>
+            <arg name = "initial_position" value = "[1.0, 1.0, 0.0]"/>
         </include>
         
         
@@ -110,7 +112,7 @@
             output = "screen">
             
             <rosparam>
-                observation_rate : 50.0
+                observation_rate : 20.0
                 uncertainty :
                     position :
                         mean : 0.0

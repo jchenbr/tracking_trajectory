@@ -1,6 +1,8 @@
 <launch>
     <arg name = "odometry_path"/>
     <arg name = "position_cmd_path"/>
+    <arg name = "initial_position" default = "[0.0, 0.0, 0.0]"/>
+    <arg name = "initial_yaw" default = "[0.0]"/>
 
   <!-- Simulator -->
   <node pkg="so3_quadrotor_simulator"
@@ -9,6 +11,8 @@
         output="screen">
    
     <param name="rate/odom" value="100.0"/>
+    <rosparam param = "initial_position" subst_value = "True">$(arg initial_position)</rosparam>
+    <rosparam param = "initial_yaw" subst_value = "True">$(arg initial_yaw)</rosparam>
 
      <!-- subscribed topic -->
     <remap from = "~cmd"                 to = "controller/so3_cmd"/>
