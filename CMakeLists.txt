@@ -184,6 +184,12 @@ add_executable(tag_detector_node
 
 add_executable(tracking_trajectory_server_node
     src/trajectory_server_node.cpp
+    src/octomap.cpp
+    src/voxel_graph.cpp
+)
+
+add_executable(simulated_laser_naive_node
+    src/simulated_laser_naive_node.cpp
 )
 
 target_link_libraries(obstacle_generator_node
@@ -227,6 +233,11 @@ target_link_libraries(tag_detector_node
 target_link_libraries(tracking_trajectory_server_node
     ${catkin_LIBRARIES}
 )
+
+target_link_libraries(simulated_laser_naive_node
+    ${catkin_LIBRARIES}
+)
+    
 
 #############
 ## Install ##
