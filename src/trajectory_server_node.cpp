@@ -95,11 +95,11 @@ public:
 
     void rcvTrajectoryCallabck(const quadrotor_msgs::PolynomialTrajectory & traj)
     {
-        ROS_WARN("[SERVER] Recevied The Trajectory with %.3lf.", _start_time.toSec());
+        //ROS_WARN("[SERVER] Recevied The Trajectory with %.3lf.", _start_time.toSec());
         // #1. try to execuse the action
         if (traj.action == quadrotor_msgs::PolynomialTrajectory::ACTION_ADD)
         {
-            ROS_WARN("[SERVER] Loading the trajectory.");
+            //ROS_WARN("[SERVER] Loading the trajectory.");
             if ((int)traj.trajectory_id < _traj_id) return ;
 
             state = TRAJ;
@@ -170,6 +170,9 @@ public:
             _cmd.acceleration.x = 0.0;
             _cmd.acceleration.y = 0.0;
             _cmd.acceleration.z = 0.0;
+            
+            _cmd.yaw_dot = 0.0;
+            _cmd.yaw = tf::getYaw(_odom.pose.pose.orientation);
         }
         // #2. locate the trajectory segment
         if (state == TRAJ)

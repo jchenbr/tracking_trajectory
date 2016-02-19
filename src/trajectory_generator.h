@@ -65,13 +65,14 @@ public:
             int M, N, R; // M:#segments, N:#Order, R:#to minimize
             double max_vel, max_acc; // restriction
             double f_vel, f_acc; // the dynamic for time allocation
-            double t_beg, t_end;
+            double t_beg, t_end, stamp;
             double lambda;
             
             bool use_stop_policy = false;
 
             bool isLegal();
             DimensionConfig getDimensionConfig(int dim);
+            void moveForward(double);
         };
 
         struct TrajectoryConfig

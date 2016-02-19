@@ -9,6 +9,7 @@ setting :
     laser_scan_resolution : 0.05
     
 map :
+    visualization_duration : 10
     boundary :
         lower_x : -20.0
         upper_x : 20.0

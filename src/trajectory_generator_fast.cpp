@@ -1224,9 +1224,9 @@ namespace VoxelTrajectory
 
         if (ierr == 0)
         {
-            clog << "Successfully found the solution." << endl;
+            // clog << "[tracker] Successfully found the solution." << endl;
         }else{
-            clog << "Something Wrong with the QP. ERR_CODE=" << ierr <<endl;
+            // clog << "[tracker] Something Wrong with the QP. ERR_CODE=" << ierr <<endl;
         }
 
         //clog<<"Just Fine log - 2"<<endl;
@@ -1399,9 +1399,9 @@ namespace VoxelTrajectory
 
         if (ierr == 0)
         {
-            clog << "Successfully found the solution." << endl;
+            //clog << "Successfully found the solution." << endl;
         }else{
-            clog << "Something Wrong with the QP. ERR_CODE=" << ierr <<endl;
+            //clog << "Something Wrong with the QP. ERR_CODE=" << ierr <<endl;
         }
 
         //clog<<"Just Fine log - 2"<<endl;
@@ -2058,6 +2058,17 @@ namespace VoxelTrajectory
         assert(R <= N);
 
         return true;
+    }
+
+    VectorXd getMovedPolynomial(int N, const VectorXd &p, double d_t);
+
+    void TrajectoryGenerator::TrackingCorridorConfig::moveForward(double dt)
+    {
+        t_end -= dt;
+        int n = traj.rows();
+        traj.col(_DIM_x) = getMovedPolynomial(n, traj.col(_DIM_x), dt);
+        traj.col(_DIM_y) = getMovedPolynomial(n, traj.col(_DIM_y), dt);
+        traj.col(_DIM_z) = getMovedPolynomial(n, traj.col(_DIM_z), dt);
     }
 
     TrajectoryGenerator::DimensionConfig 

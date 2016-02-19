@@ -273,6 +273,7 @@ sensor_msgs::PointCloud getPointCloudFromTraj(
     ret.header.frame_id = frame_id;
     ret.header.stamp = ros::Time::now();
 
+    //ROS_WARN_STREAM("[POSE_UTILS] t = " << time.transpose());
     ret.points.reserve((time.sum() + d_t) / d_t);
 
     int m = time.rows(), n = traj.rows()/m;
@@ -510,7 +511,7 @@ vector<double> getStdVecFromLaserScan(
                 blk.push_back(pt(_DIM_X) + margin);
                 blk.push_back(pt(_DIM_Y) - margin);
                 blk.push_back(pt(_DIM_Y) + margin);
-                blk.push_back(pt(_DIM_Z) - margin);
+                blk.push_back(pt(_DIM_Z) - margin - extra_height);
                 blk.push_back(pt(_DIM_Z) + margin + extra_height);
             }
             count = 0;

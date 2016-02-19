@@ -1288,6 +1288,7 @@ namespace VoxelTrajectory
         const Eigen::MatrixXd & coef, 
         const double t_start, 
         const double t_end,
+        double & allowed_t_end,
         double step)
     {
         assert(init_pos.size() >= _TOT_DIM);
@@ -1352,7 +1353,7 @@ namespace VoxelTrajectory
             t_path.push_back(make_pair(t, l));
             t = r;
         }
-#if 1
+#if 0
         ROS_INFO("[corridor] T = [%lf, %lf]", t_start, t_end);
         ROS_INFO_STREAM("[corridor] traj : \n" << coef);
         {
@@ -1450,6 +1451,7 @@ namespace VoxelTrajectory
             //for (auto & row: face) ROS_WARN_STREAM("face : " << row);
             //for (auto & row: grid) ROS_WARN_STREAM("grid : " << row);
 
+            allowed_t_end =  t_end;
             while (next(_tail) != end(id_path))
             {
                 for (auto _next = next(_tail); _next != end(id_path); _next = next(_next))
@@ -1461,10 +1463,15 @@ namespace VoxelTrajectory
                     _tail = _next;
                 }
                 
+                if (next(_tail) != end(id_path))
+                    allowed_t_end = t_path[_tail - id_path.begin()].second;
+                else
+                    allowed_t_end =  t_end;
+                    
                 if (next(_tail) != end(id_path) && !pathToCorridor(
                             getGridCenter(*_tail),
                             next(_tail), end(id_path)))
-                    return false;
+                    break;
             }
 
             //ROS_WARN("All segment ready, tail = %d", (int)(_tail - begin(id_path)));

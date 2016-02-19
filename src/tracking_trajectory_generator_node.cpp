@@ -67,8 +67,12 @@ class TrackingTrajectoryGenerator
     //  34. only trust the estimation when we have enough observation. (done)
     //  35. pop the old observation away. (done)
     //  36. bug: multi-starts A* with no starts points. (temporatory solved.)
-    //  37. feature: allow infeasible end
-    //  38. bug: if diff of odom stamp and traj stamp.
+    //  37. feature: allow infeasible end.
+    //  38. bug: if diff of odom stamp and traj stamp. (done)
+    //  39. visulize the history trajectory. (done)
+    //  40. simulated laser
+    //  41. improved target observer: obstacle aware, field of view. 
+    //  42. stop trajectory if obstacle within the old trajectory. (done)
 
 public:
     ///> the intialization!
@@ -109,6 +113,7 @@ private:
     ros::Subscriber _pts_sub;   // map points cloud
     ros::Subscriber _obs_sub;   // the target observation
     ros::Subscriber _tag_sub;
+    ros::Subscriber _scan_sub;
 
     ros::Publisher _traj_pub;   // flight trajectory 
     ros::Publisher _yaw_pub;
@@ -118,6 +123,8 @@ private:
     ros::Publisher _vis_crd_pub; // visual corridor
     ros::Publisher _vis_obs_pub; // visual target observation 
     ros::Publisher _vis_dsd_pub; // visual desired trajectory
+    ros::Publisher _vis_hst_pub; // visual history trajectory
+    ros::Publisher _vis_blk_pub;
     
     ros::Publisher _debug_pub; // publish debug & running info
 
@@ -142,6 +149,7 @@ private:
 
     int _obs_valid_num  = 20;
     double _obs_rsv_drt = 5.0;
+    double _valid_lost_drt = 1.0;
     
 
     bool is_fixed_height = true;
@@ -181,6 +189,8 @@ private:
     Eigen::RowVectorXd _kp_dst;                                 // the distance vector to the target
 
     quadrotor_msgs::PolynomialTrajectory _traj_msg;
+    sensor_msgs::PointCloud _hist_traj_msg;
+    int _hist_traj_count = 0, _hist_traj_iterator = 0;
 
     ///> internal mechanism
     void _initMap();
@@ -225,6 +235,8 @@ TrackingTrajectoryGenerator::TrackingTrajectoryGenerator(ros::NodeHandle & crt_h
                 10, &TrackingTrajectoryGenerator::rcvGlobalBlockCloud, this);
         _tag_sub = msg_handle.subscribe("tag_pose_in_camera", 
                 10, &TrackingTrajectoryGenerator::rcvTagObservation, this);
+        _scan_sub = msg_handle.subscribe("laser_scan",
+                10, &TrackingTrajectoryGenerator::rcvLocalLaserScan, this);
 
         _traj_pub = msg_handle.advertise<quadrotor_msgs::PolynomialTrajectory>(
                 "flight_trajectory", 10);
@@ -242,6 +254,10 @@ TrackingTrajectoryGenerator::TrackingTrajectoryGenerator(ros::NodeHandle & crt_h
                 "visual_target_observation", 10);
         _vis_dsd_pub = msg_handle.advertise<sensor_msgs::PointCloud>(
                 "visual_desired_trajectory", 10);
+        _vis_hst_pub = msg_handle.advertise<sensor_msgs::PointCloud>(
+                "visual_history_trajectory", 10);
+        _vis_blk_pub = msg_handle.advertise<sensor_msgs::PointCloud>(
+                "visual_blocks", 10);
         _debug_pub = msg_handle.advertise<std_msgs::String>(
                 "debug_info", 50);
     }
@@ -322,6 +338,7 @@ TrackingTrajectoryGenerator::TrackingTrajectoryGenerator(ros::NodeHandle & crt_h
         param_handle.param("estimation/valid_size", _obs_valid_num, _obs_valid_num);
         param_handle.param("estimation/reserved_duration", _obs_rsv_drt, _obs_rsv_drt);
         param_handle.param("estimation/predition_time", _pdt_end, _pdt_end);
+        param_handle.param("estimation/valid_lost_duration", _valid_lost_drt, _valid_lost_drt);
         double lambda = 0.01;
         param_handle.param("estimation/lambda", lambda, lambda);
         _estimator = new TrackingTrajectory::TrajectoryEstimator(_n_dgr_est);
@@ -344,19 +361,26 @@ TrackingTrajectoryGenerator::TrackingTrajectoryGenerator(ros::NodeHandle & crt_h
     { // private variable initialization
         _traj_msg.header.stamp = ros::TIME_MIN; //used for judging the initial state
         _traj_msg.action = quadrotor_msgs::PolynomialTrajectory::ACTION_ABORT;
+
+        _hist_traj_msg.header.frame_id = "/map";
+        _hist_traj_msg.header.stamp = ros::Time::now();
     }
 }
 
 void TrackingTrajectoryGenerator::rcvTargetObservation(const geometry_msgs::PoseStamped &pose)
 {
-
-    {
+#if 1
+    { // when observed target, control yaw accordingly
         std_msgs::Float64 yaw;
-        yaw.data = atan2(pose.pose.position.y - _odom.pose.pose.position.y , 
-                pose.pose.position.x - _odom.pose.pose.position.x);
-        _yaw_pub.publish(yaw);
+        double y = pose.pose.position.y - _odom.pose.pose.position.y;
+        double x = pose.pose.position.x - _odom.pose.pose.position.x;
+        if (abs(x) + abs(y) > 0.2)
+        {
+            yaw.data = atan2(y, x);
+            _yaw_pub.publish(yaw);
+        }
     }
-
+#endif
     {
         VectorXd pos(_TOT_DIM);
         pos << 
@@ -371,14 +395,60 @@ void TrackingTrajectoryGenerator::rcvTargetObservation(const geometry_msgs::Pose
 void TrackingTrajectoryGenerator::rcvCurrentOdometry(const nav_msgs::Odometry & odom)
 {
     _odom = odom;
-
+    
+    // store odometry for obsertion on the body frame
     _odom_queue.push_back(odom);
     while (_odom_queue.size() > _odom_queue_size) _odom_queue.pop_front();
 
+    // abort all target observation if lost for a period
+    if ((!_tgt_obs.empty()) &&
+            (odom.header.stamp.toSec() - _tgt_obs.back().first) > _valid_lost_drt)
+        _tgt_obs.clear();
+
     if (!_is_simulation)
     {
+        // abort old old observation
         while (!_tgt_obs.empty() && 
             _tgt_obs.front().first + _obs_rsv_drt < odom.header.stamp.toSec()) _tgt_obs.pop_front();
+    }
+
+
+    // publish historical trajetory
+    if (_flag_vis)
+    {
+        if (_hist_traj_count) 
+            _hist_traj_count -= 1;
+        else
+        {
+            _hist_traj_count = 10;
+            geometry_msgs::Point32 p;
+            p.x = odom.pose.pose.position.x;
+            p.y = odom.pose.pose.position.y;
+            p.z = odom.pose.pose.position.z;
+            if (_hist_traj_msg.points.size() < 600) 
+                _hist_traj_msg.points.push_back(p);
+            else
+                _hist_traj_msg.points[_hist_traj_iterator] = p;
+            _hist_traj_iterator += 1;
+            _hist_traj_iterator %= 600;
+            _vis_hst_pub.publish(_hist_traj_msg);
+        }
+    }
+    
+    // if the taget is out of view, control yaw by predicted position
+    if (    _odom.header.stamp.toSec() > _crd_config.stamp + _reg_traj_drt.toSec() * 1.5 &&
+            _odom.header.stamp.toSec() < _crd_config.stamp + _crd_config.t_end)
+    {
+        auto state = getStateFromTrajByTime(_crd_config.traj, 
+                _odom.header.stamp.toSec() - _crd_config.stamp);
+        std_msgs::Float64 yaw;
+        double y = state(_STT_POS, _DIM_Y) - _kp_dst[_DIM_Y] - _odom.pose.pose.position.y;
+        double x = state(_STT_POS, _DIM_X) - _kp_dst[_DIM_X] - _odom.pose.pose.position.x;
+        if (abs(x) + abs(y) > 0.05)
+        {
+            yaw.data = atan2(y, x);
+            _yaw_pub.publish(yaw);
+        }
     }
 }
 
@@ -395,15 +465,21 @@ void TrackingTrajectoryGenerator::rcvGlobalBlockCloud(const sensor_msgs::PointCl
 void TrackingTrajectoryGenerator::pubTrackingTrajectory()
 {
     ros::Duration est_drt, crd_drt, ift_drt, trj_drt;
+
+    // if not enough observation, use existing predicted trajecotry, 
+    if ((int)_tgt_obs.size() > _obs_valid_num)
     {// estimation of the trajectory
-        if ((int)_tgt_obs.size() < _obs_valid_num) return ;
         TrackingTrajectory::TargetObservation obs(_tgt_obs.begin(), _tgt_obs.end());
         if (obs.empty()) return ;
 
         double beg_time = (_is_simulation) ? obs.back().first : _odom.header.stamp.toSec();
 
+        // move to the relative time
         for (auto & pr: obs) pr.first -= beg_time;
+
+        // fixed height 
         if (is_fixed_height) for (auto & pr: obs) pr.second(_DIM_Z) = 0.0;
+
         {// kernel call.
             ros::Time pre_est_stamp = ros::Time::now();
             _crd_config.traj = _estimator->estimateTrajectory(obs);
@@ -411,21 +487,41 @@ void TrackingTrajectoryGenerator::pubTrackingTrajectory()
         }
         _crd_config.t_beg = _pdt_beg;
         _crd_config.t_end = _pdt_end;
+        _crd_config.stamp = _odom.header.stamp.toSec();
 
-        ROS_WARN("[TRK_TRAJ] obs size = %d, prediction time = %lf \n", _sz_tgt_obs, _pdt_end);
-        this->pubVisualTargetObservation();
+        //ROS_WARN("[TRK_TRAJ] obs size = %d, prediction time = %lf \n", _sz_tgt_obs, _pdt_end);
         this->pubVisualTargetTrajectory();
+        // move the predicted trajectory to get desired trajectory
         _crd_config.traj.row(0) += _kp_dst;
         this->pubVisualDesiredTrajectory();
+        this->pubVisualTargetObservation();
     }
-    ROS_WARN_STREAM("[TRK_TRAJ] estimated traj:\n" << _crd_config.traj);
+    else
+    {
+#if 0
+        ROS_WARN_STREAM("[ESTIMATION] use existing estimation!!!!!!!!!!!!!");
+        ROS_WARN_STREAM("[ESTIMATION] time window = " <<
+                _odom.header.stamp.toSec() - _crd_config.stamp <<  ", " <<
+                _crd_config.t_end);
+#endif
+        // if the predicting is overtime, just abort it.
+        if (_odom.header.stamp.toSec() > _crd_config.stamp + _crd_config.t_end) return ;
+        // moving the prediction accordingly
+        _crd_config.moveForward(_odom.header.stamp.toSec() - _crd_config.stamp);
+        this->pubVisualDesiredTrajectory();
+    }
+    //ROS_WARN_STREAM("[TRK_TRAJ] estimated traj:\n" << _crd_config.traj);
 
-    ROS_WARN("[TRK_TRAJ] going to find the corridor");
+    //ROS_WARN("[TRK_TRAJ] going to find the corridor");
+    // allowed time end variable will be used if the corridor tail is obstacled.
+    double allowed_t_end = _crd_config.t_end;
     {// generation of the flight corridor
         pair<Eigen::MatrixXd, Eigen::MatrixXd> flt_crd;
         Eigen::MatrixXd init_state(_TOT_STT, _TOT_DIM);
+
+        // generate the inital state 
         if (_traj_msg.action != quadrotor_msgs::PolynomialTrajectory::ACTION_ADD
-                ||(_odom.header.stamp - _traj_msg.header.stamp).toSec() > _pdt_end)
+                ||(_odom.header.stamp - _traj_msg.header.stamp).toSec() > _crd_config.t_end)
         {
             init_state << 
                 _odom.pose.pose.position.x, 
@@ -437,7 +533,7 @@ void TrackingTrajectoryGenerator::pubTrackingTrajectory()
                 0.0, 0.0, 0.0;
         } 
         else
-        {
+        { // desired state can provied expected acceleration, so preferred
             init_state << getStateFromTrajByTime(
                     _traj_config.coef,
                     _traj_config.time,
@@ -446,7 +542,8 @@ void TrackingTrajectoryGenerator::pubTrackingTrajectory()
         { // the kernel call
             ros::Time pre_crd_stamp = ros::Time::now();
             if (!_map->retPathFromTraj(
-                        flt_crd, init_state.row(_STT_POS).transpose(), _crd_config.traj, _pdt_beg, _pdt_end))
+                        flt_crd, init_state.row(_STT_POS).transpose(), _crd_config.traj, 
+                        0.0, _crd_config.t_end, allowed_t_end))
             {
                 ROS_WARN_STREAM("\n[TRAJECTORY_GENERATOR] There is no legal corridor.");
                 return ;
@@ -459,19 +556,20 @@ void TrackingTrajectoryGenerator::pubTrackingTrajectory()
        //         << ", " << flt_crd.second.rows() << ", " << flt_crd.second.cols());
        // ROS_WARN_STREAM("\n grid :\n" << flt_crd.first << "\nface:\n" << flt_crd.second);
 
-        ROS_WARN("[TRK_TRAJ] corridor found!");
+        //ROS_WARN("[TRK_TRAJ] corridor found!");
         // get the segment number
         _crd_config.M = flt_crd.first.rows();
 
         // get the inital and final state
         _crd_config.init_state = init_state;
-        _crd_config.dest_state = getStateFromTrajByTime(_crd_config.traj, _pdt_end);
+        _crd_config.dest_state = getStateFromTrajByTime(_crd_config.traj, _crd_config.t_end);
+        _crd_config.t_end = min(allowed_t_end, _crd_config.t_end);
 
         // load the corridor
         _crd_config.face = flt_crd.second;
         _crd_config.uninflated_grid = 
             flt_crd.first.block(_ROW_BEG, _BDY_BEG, _crd_config.M, _TOT_BDY);
-        ROS_WARN("[TRK_TRAJ] corridor is going to be inflated!");
+        //ROS_WARN("[TRK_TRAJ] corridor is going to be inflated!");
         { // call the kernel
             ros::Time pre_ift_stamp = ros::Time::now();
             _crd_config.grid = getInflatedCorridor(_map, 
@@ -488,7 +586,7 @@ void TrackingTrajectoryGenerator::pubTrackingTrajectory()
 
 
     {// generation of the flight trajectory
-        ROS_WARN("[TRK_TRAJ] going to generate tracking traj!");
+        //ROS_WARN("[TRK_TRAJ] going to generate tracking traj!");
         { // call the kernel
             ros::Time pre_trj_stamp = ros::Time::now();
             auto tmp_config = _generator->getTrackingTrajectory(_crd_config);
@@ -543,13 +641,13 @@ void TrackingTrajectoryGenerator::pubVisualTrackingTrajectory()
 void TrackingTrajectoryGenerator::pubVisualTargetTrajectory()
 {
     if (!_flag_vis) return ;
-    _vis_est_pub.publish(getPointCloudFromTraj(_crd_config.traj, _pdt_end));
+    _vis_est_pub.publish(getPointCloudFromTraj(_crd_config.traj, _crd_config.t_end));
 }
 
 void TrackingTrajectoryGenerator::pubVisualDesiredTrajectory()
 {
     if (!_flag_vis) return ;
-    _vis_dsd_pub.publish(getPointCloudFromTraj(_crd_config.traj, _pdt_end));
+    _vis_dsd_pub.publish(getPointCloudFromTraj(_crd_config.traj, _crd_config.t_end));
 }
 
 void TrackingTrajectoryGenerator::pubVisualTargetObservation()
@@ -584,26 +682,36 @@ void TrackingTrajectoryGenerator::pubVisualTargetCorridor()
 
 void TrackingTrajectoryGenerator::regTrajectoryCallback(const ros::TimerEvent & evt)
 {
-    pubTrackingTrajectory();
-
-    {// check obstacle along the trajctory, there is no trajectory
-        if (_traj_msg.action != quadrotor_msgs::PolynomialTrajectory::ACTION_ADD) return ;
-        for (double t = _pdt_beg; t <= _pdt_end; t+= _check_dt)
+    bool flag_abort = false;
+    {// check obstacle along the old trajctory
+        if (_traj_msg.action == quadrotor_msgs::PolynomialTrajectory::ACTION_ADD) 
         {
-            auto state = getStateFromTrajByTime(
-                    _traj_config.coef, _traj_config.time, t);
-            vector<double> pos {
-                state(_STT_POS, _DIM_X), 
-                state(_STT_POS, _DIM_Y), 
-                state(_STT_POS, _DIM_Z)}; 
-            if (_map->testObstacle(pos.data()))
+            double _t_check_beg = (_odom.header.stamp - _traj_msg.header.stamp).toSec();
+            double _t_check_end = _traj_config.time.sum();
+            for (double t = _t_check_beg; t <= _t_check_end; t+= _check_dt)
             {
-                _traj_msg.action = quadrotor_msgs::PolynomialTrajectory::ACTION_ABORT;
-                _traj_pub.publish(_traj_msg);
-                return ;
+                auto state = getStateFromTrajByTime(
+                        _traj_config.coef, _traj_config.time, t);
+                vector<double> pos {
+                    state(_STT_POS, _DIM_X), 
+                    state(_STT_POS, _DIM_Y), 
+                    state(_STT_POS, _DIM_Z)}; 
+                if (_map->testObstacle(pos.data()))
+                {
+                    _traj_msg.action = quadrotor_msgs::PolynomialTrajectory::ACTION_ABORT;
+                    flag_abort = true;
+                    ROS_WARN_STREAM("[OBSTACLE_CHECK]The old trajectory is doomed!");
+                    break;
+                }
             }
         }
     }
+    pubTrackingTrajectory();
+#if 1
+    // no new obstacle, and the old is aborted
+    if (flag_abort && _traj_msg.action != quadrotor_msgs::PolynomialTrajectory::ACTION_ADD)
+        _traj_pub.publish(_traj_msg);
+#endif
 }
     
 void TrackingTrajectoryGenerator::visMapCallback(const ros::TimerEvent & evt)
@@ -619,17 +727,32 @@ void TrackingTrajectoryGenerator::rcvLocalLaserScan(const sensor_msgs::LaserScan
 
     nav_msgs::Odometry laser_odom = _odom_queue.back();
     for (auto & odom: _odom_queue)
-       if (odom.header.stamp > _laser_stp)
+       if (odom.header.stamp >= _laser_stp)
        {
            laser_odom = odom;
            break;
        } 
 
-   auto blk = getStdVecFromLaserScan(scan, laser_odom,
+    auto blk = getStdVecFromLaserScan(scan, laser_odom,
            _safe_margin, _laser_resolution, _laser_count_thld,
            _laser_height_thld, _laser_extra_height);
 
-   _map->insertBlocks(blk);
+    {
+        sensor_msgs::PointCloud cloud;
+        cloud.header.frame_id = "/map";
+        cloud.header.stamp = ros::Time::now();
+        for (size_t idx = 0; idx * _TOT_BDY < blk.size(); ++idx)
+        {
+            geometry_msgs::Point32 p;
+            p.x = 0.5 * (blk[idx * _TOT_BDY + _BDY_L_X] + blk[idx * _TOT_BDY + _BDY_R_X]);
+            p.y = 0.5 * (blk[idx * _TOT_BDY + _BDY_L_Y] + blk[idx * _TOT_BDY + _BDY_R_Y]);
+            p.z = 0.5 * (blk[idx * _TOT_BDY + _BDY_L_Z] + blk[idx * _TOT_BDY + _BDY_R_Z]);
+            cloud.points.push_back(p);
+        }
+        _vis_blk_pub.publish(cloud);
+    }
+
+    _map->insertBlocks(blk);
 }
 
 void TrackingTrajectoryGenerator::rcvTagObservation(const geometry_msgs::PoseStamped & pose)

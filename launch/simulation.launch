@@ -19,7 +19,8 @@
                         lower_z : 0.0
                         upper_z : 40.0
                     forest :
-                        number : 180
+                        number : 80
+                        is_rotated : true
                         stem :
                             height :
                                 mean : 7
@@ -29,11 +30,15 @@
                                 variance : 0.5
                         top :
                             height :
-                                mean : 0.0
-                                variance : 0.0
+                                mean : 0.02
+                                variance : 0.4
                             radius :
-                                mean : 0.0
-                                variance : 0.0
+                                mean : 0.02
+                                variance : 0.4
+                        resolution : 
+                            position : 0.1
+                            orientation : 0.1
+                            map : 0.2
             </rosparam>
             <!-- subscribed topics -->
             <remap from = "~obstcle_type" to = "obstacle_type"/>
@@ -94,16 +99,54 @@
             <arg name = "odometry_path" value = "/tracker/odometry"/>
             <arg name = "position_cmd_path" value = "/tracker/position_cmd"/>
             <arg name = "initial_position" value = "[1.0, 1.0, 0.0]"/>
+            <arg name = "initial_pointed_to" value = "[0.0, 0.0, 0.0]"/>
         </include>
         
         
         <include ns = "trajectory" file = "$(find tracking_trajectory)/launch/tracking_trajectory_generator.launch">
             <arg name = "observation_path" value = "/tracker/observation"/>
             <arg name = "odometry_path" value = "/tracker/odometry"/>
-            <arg name = "obstacle_points_path" value = "/environment/obstacle_points"/>
-            <arg name = "obstacle_blocks_path" value = "/environment/obstacle_blocks"/>
+            <arg name = "obstacle_points_path" value = "/environment/null"/>
+            <arg name = "obstacle_blocks_path" value = "/environment/null"/>
             <arg name = "position_cmd_path" value = "/tracker/position_cmd"/>
+            <arg name = "laser_scan_path" value = "/tracker/simulated_laser/scan"/>
         </include>
+        
+        <node
+            pkg = "tracking_trajectory"
+            type = "simulated_laser_naive_node"
+            name = "simulated_laser"
+            output = "screen"
+        >
+            <rosparam>
+                map :
+                    boundary :
+                        lower_x : -100.0
+                        upper_x : 100.0
+                        lower_y : -100.0
+                        upper_y : 100.0
+                        lower_z : 0.0
+                        upper_z : 200.0
+                limited_sensing :
+                    rate : 20
+                    angle :
+                        min : 0.0
+                        max : 6.27969464868
+                        increment : 0.0034906585
+                    range :
+                        min : 0.1
+                        max : 10.0
+                        increment : 0.1
+            </rosparam>
+            
+            <!-- subscribed topics -->
+            <remap from = "~odometry" to = "/tracker/odometry"/>
+            <remap from = "~obstacle_points" to = "/environment/obstacle_points"/>
+            <remap from = "~obstacle_blocks" to = "/environment/obstacle_blocks"/>
+            
+            <!-- advertised topics -->
+            <remap from = "~scan" to = "~scan"/>
+        </node>
         
         <node 
             pkg = "tracking_trajectory"
@@ -117,9 +160,17 @@
                     position :
                         mean : 0.0
                         variance  : 0.01 
+                sensing :
+                    range : 4.0
+                    view_field : 0.78539816339
+                map :
+                    boundary : [-100.0, 100.0, -100, 100, 0.0, 200.0]
+                    resolution : 0.008
             </rosparam>
             
             <remap from = "~target_odometry" to = "/target/odometry"/>
+            <remap from = "~body_odometry" to = "/tracker/odometry"/>
+            <remap from = "~obstacle_blocks" to = "/environment/obstacle_blocks"/>
             <remap from = "~observed_pose" to = "/tracker/observation"/>
         </node>
         

@@ -105,6 +105,7 @@ public:
                     const Eigen::MatrixXd & coef, 
                     const double t_start, 
                     const double t_end,
+                    double & allowed_t_end,
                     double step = 0.01);
     };
 }
