@@ -14,9 +14,10 @@ Panels:
       Expanded:
         - /Global Options1
         - /Basic1/Grid1
-        - /target1/UKF Odom1
+        - /target1
+        - /target1/UKF Odom1/Velocity UKF1
         - /tracker1
-        - /tracker1/map_grids1
+        - /desired_trajectory1
       Splitter Ratio: 0.5
     Tree Height: 581
   - Class: rviz/Views
@@ -62,10 +63,10 @@ Visualization Manager:
           Displays:
             - Class: rviz/Marker
               Enabled: true
-              Marker Topic: /odom_visualization_ukf/robot
+              Marker Topic: /target/odom_visualization_ukf/robot
               Name: Robot UKF
               Namespaces:
-                {}
+                mesh: true
               Queue Size: 100
               Value: true
             - Alpha: 1
@@ -80,14 +81,14 @@ Visualization Manager:
               Shaft Length: 1
               Shaft Radius: 0.05
               Shape: Axes
-              Topic: /odom_visualization_ukf/pose
+              Topic: /target/odom_visualization_ukf/pose
               Value: true
             - Class: rviz/Marker
               Enabled: true
-              Marker Topic: /odom_visualization_ukf/velocity
+              Marker Topic: /target/odom_visualization_ukf/velocity
               Name: Velocity UKF
               Namespaces:
-                {}
+                velocity: true
               Queue Size: 100
               Value: true
             - Alpha: 1
@@ -119,7 +120,7 @@ Visualization Manager:
           Marker Topic: /target/trajectory/trajectory_generator/visualization/trajectory
           Name: trajectory
           Namespaces:
-            {}
+            trajectory/trajectory: true
           Queue Size: 100
           Value: true
         - Alpha: 0.1
@@ -216,14 +217,14 @@ Visualization Manager:
         - Alpha: 0.1
           Autocompute Intensity Bounds: true
           Autocompute Value Bounds:
-            Max Value: 5.70312
-            Min Value: -0.078125
+            Max Value: 9.29688
+            Min Value: 0.078125
             Value: true
           Axis: Z
           Channel Name: intensity
           Class: rviz/PointCloud
-          Color: 255; 255; 255
-          Color Transformer: AxisColor
+          Color: 0; 0; 127
+          Color Transformer: FlatColor
           Decay Time: 0
           Enabled: true
           Invert Rainbow: false
@@ -237,7 +238,7 @@ Visualization Manager:
           Selectable: true
           Size (Pixels): 3
           Size (m): 0.16
-          Style: Points
+          Style: Boxes
           Topic: /tracker/trajectory/visualization/map_grids
           Use Fixed Frame: true
           Use rainbow: true
@@ -276,7 +277,7 @@ Visualization Manager:
           Marker Topic: /tracker/trajectory/visualization/flight_corridor
           Name: corridor
           Namespaces:
-            {}
+            tracking_trajectory/corridor: true
           Queue Size: 100
           Value: true
         - Alpha: 1
@@ -364,6 +365,35 @@ Visualization Manager:
               Value: false
           Enabled: true
           Name: UKF Odom
+        - Alpha: 1
+          Autocompute Intensity Bounds: true
+          Autocompute Value Bounds:
+            Max Value: 10
+            Min Value: -10
+            Value: true
+          Axis: Z
+          Channel Name: intensity
+          Class: rviz/PointCloud
+          Color: 170; 255; 127
+          Color Transformer: FlatColor
+          Decay Time: 0
+          Enabled: true
+          Invert Rainbow: false
+          Max Color: 255; 255; 255
+          Max Intensity: 4096
+          Min Color: 0; 0; 0
+          Min Intensity: 0
+          Name: history_trajectory
+          Position Transformer: XYZ
+          Queue Size: 10
+          Selectable: true
+          Size (Pixels): 3
+          Size (m): 0.01
+          Style: Points
+          Topic: /tracker/trajectory/trajectory_generator/visual_history_trajectory
+          Use Fixed Frame: true
+          Use rainbow: true
+          Value: true
       Enabled: true
       Name: tracker
     - Alpha: 1
@@ -381,17 +411,75 @@ Visualization Manager:
       Enabled: true
       Invert Rainbow: false
       Max Color: 255; 255; 255
-      Max Intensity: 1335
+      Max Intensity: 4096
       Min Color: 0; 0; 0
-      Min Intensity: 197
-      Name: PointCloud
+      Min Intensity: 0
+      Name: blocks
       Position Transformer: XYZ
       Queue Size: 10
       Selectable: true
       Size (Pixels): 3
       Size (m): 0.01
-      Style: Points
-      Topic: /tracker/trajectory/trajectory_generator/visual_obstacle_points
+      Style: Flat Squares
+      Topic: /tracker/trajectory/trajectory_generator/visual_blocks
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: true
+    - Alpha: 0.2
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 10
+        Min Value: -10
+        Value: true
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz/PointCloud2
+      Color: 255; 255; 255
+      Color Transformer: FlatColor
+      Decay Time: 0
+      Enabled: true
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Max Intensity: 4096
+      Min Color: 0; 0; 0
+      Min Intensity: 0
+      Name: map_in_target
+      Position Transformer: XYZ
+      Queue Size: 10
+      Selectable: true
+      Size (Pixels): 3
+      Size (m): 0.16
+      Style: Boxes
+      Topic: /target/trajectory/trajectory_generator/visualization/map_grids
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: true
+    - Alpha: 1
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 10
+        Min Value: -10
+        Value: true
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz/PointCloud
+      Color: 255; 255; 0
+      Color Transformer: FlatColor
+      Decay Time: 0
+      Enabled: true
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Max Intensity: 4096
+      Min Color: 0; 0; 0
+      Min Intensity: 0
+      Name: desired_trajectory
+      Position Transformer: XYZ
+      Queue Size: 10
+      Selectable: true
+      Size (Pixels): 3
+      Size (m): 0.04
+      Style: Flat Squares
+      Topic: /tracker/trajectory/trajectory_generator/visual_desired_trajectory
       Use Fixed Frame: true
       Use rainbow: true
       Value: true
@@ -411,7 +499,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 68.4916
+      Distance: 38.8541
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.06
         Stereo Focal Distance: 1
@@ -423,10 +511,10 @@ Visualization Manager:
         Z: -22.1907
       Name: Current View
       Near Clip Distance: 0.01
-      Pitch: 1.0148
+      Pitch: 1.1298
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 5.88505
+      Yaw: 5.99003
     Saved: ~
 Window Geometry:
   Displays:
@@ -440,5 +528,5 @@ Window Geometry:
   Views:
     collapsed: false
   Width: 1301
-  X: 55
-  Y: 14
+  X: 1763
+  Y: 125
