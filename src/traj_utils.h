@@ -360,7 +360,7 @@ Eigen::MatrixXd getStateFromTrajByTime(
         const Eigen::MatrixXd & coef,
         double t)
 {
-    assert(coef.cols() == TOT_DIM);
+    assert(coef.cols() == _TOT_DIM);
     MatrixXd ret = MatrixXd::Zero(3, 3);
     double T = 1.0;
     int n = coef.rows();
