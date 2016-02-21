@@ -709,7 +709,7 @@ void TrackingTrajectoryGenerator::regTrajectoryCallback(const ros::TimerEvent & 
     pubTrackingTrajectory();
 #if 1
     // no new obstacle, and the old is aborted
-    if (flag_abort && _traj_msg.action != quadrotor_msgs::PolynomialTrajectory::ACTION_ADD)
+    if (flag_abort && _traj_msg.action == quadrotor_msgs::PolynomialTrajectory::ACTION_ABORT)
         _traj_pub.publish(_traj_msg);
 #endif
 }

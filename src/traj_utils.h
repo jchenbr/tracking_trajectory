@@ -518,7 +518,7 @@ vector<double> getStdVecFromLaserScan(
             last_pt = pt;
         }
     }
-    if (count >= count_thld)
+    if (count >= count_thld && last_pt(_DIM_Z) > height_thld)
     {
         blk.push_back(last_pt(_DIM_X) - margin);
         blk.push_back(last_pt(_DIM_X) + margin);
