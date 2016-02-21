@@ -8,7 +8,7 @@ setting :
     # laser setting
     laser :
         resolution : 0.05
-        count_threshold : 2
+        count_threshold : 0
         laser_height_threshold : 0.25
         extra_height : 3.5
         cycle_duration : 0.1
