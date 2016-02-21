@@ -31,6 +31,7 @@ private:
     vector<float> _sensed_pts;
     double _sensing_range_inc = 0.1;
 
+    int angle_count = 100;
     //laser
 
     const double _PI = acos(-1.0);          // arc
@@ -53,16 +54,18 @@ public:
 
         { // settings 
             double angle_min, angle_max, angle_inc, range_min, range_max;
+            int count = 100;
             handle.param("limited_sensing/rate", _sensing_rate, 20);
-            handle.param("limited_sensing/angle/min", angle_min, 2.0 * _PI * 0 / 1800);
-            handle.param("limited_sensing/angle/max", angle_max, 2.0 * _PI * 1799 / 1800);
-            handle.param("limited_sensing/angle/increment", angle_inc, 2.0 * _PI * 1 / 1800);
+            handle.param("limited_sensing/angle/min", angle_min, 0.0);
+            handle.param("limited_sensing/angle/max", angle_max, 2.0);
+            handle.param("limited_sensing/angle/count", count, 100);
             handle.param("limited_sensing/range/min", range_min, 0.0);
             handle.param("limited_sensing/range/max", range_max, 10.0);
             handle.param("limited_sensing/range/increment", _sensing_range_inc, 0.1);
-            _scan.angle_min = angle_min;
-            _scan.angle_max = angle_max;
-            _scan.angle_increment = angle_inc;
+            _scan.angle_increment = angle_max / count;
+            _scan.angle_min = _scan.angle_increment * 0;
+            _scan.angle_max = _scan.angle_increment * (count - 1);
+            angle_count = count;
             _scan.range_min = range_min;
             _scan.range_max = range_max;
         }
@@ -144,10 +147,10 @@ public:
                 _odom.pose.pose.position.y,
                 _odom.pose.pose.position.z);
 
-        for (double yaw = _scan.angle_min; yaw <= _scan.angle_max + _EPS; yaw += _scan.angle_increment)
+        for (int i = 0; i < angle_count; ++i)
         {
-            double r;
-            for (r = _scan.range_min; r <= _scan.range_max + _EPS; r += 0.1)
+            double r, yaw = i * _scan.angle_increment;
+            for (r = _scan.range_min; r <= _scan.range_max + _EPS; r += _sensing_range_inc)
             {
                 Eigen::Vector3d p(r * cos(yaw), r * sin(yaw), 0.0);
                 p = rotation * p + trans; 
