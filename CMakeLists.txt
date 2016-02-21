@@ -216,7 +216,6 @@ target_link_libraries(tracking_trajectory_generator_node
    blas
    ma27
    gfortran
-   mosek64
 )
 
 target_link_libraries(simulated_sensor_node
