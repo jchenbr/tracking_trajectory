@@ -95,6 +95,9 @@ public:
     void pubVisualTrackingTrajectory();
     void pubVisualTargetObservation();
     void pubVisualDesiredTrajectory();
+    void pubVisualBlocks(const vector<double> &);
+    void pubVisualLaserScan(const sensor_msgs::LaserScan &);
+    void pubVisualHistoryTrajectory();
 
     ///> cycled actions
     void regTrajectoryCallback(const ros::TimerEvent & evt);
@@ -418,26 +421,7 @@ void TrackingTrajectoryGenerator::rcvCurrentOdometry(const nav_msgs::Odometry & 
 
 
     // publish historical trajetory
-    if (_flag_vis)
-    {
-        if (_hist_traj_count) 
-            _hist_traj_count -= 1;
-        else
-        {
-            _hist_traj_count = 10;
-            geometry_msgs::Point32 p;
-            p.x = odom.pose.pose.position.x;
-            p.y = odom.pose.pose.position.y;
-            p.z = odom.pose.pose.position.z;
-            if (_hist_traj_msg.points.size() < 600) 
-                _hist_traj_msg.points.push_back(p);
-            else
-                _hist_traj_msg.points[_hist_traj_iterator] = p;
-            _hist_traj_iterator += 1;
-            _hist_traj_iterator %= 600;
-            _vis_hst_pub.publish(_hist_traj_msg);
-        }
-    }
+    pubVisualHistoryTrajectory(); 
     
     // if the taget is out of view, control yaw by predicted position
     if (    _odom.header.stamp.toSec() > _crd_config.stamp + _reg_traj_drt.toSec() * 1.5 &&
@@ -631,33 +615,58 @@ void TrackingTrajectoryGenerator::pubTrackingTrajectory()
     return ;
 }
 
+void TrackingTrajectoryGenerator::pubVisualHistoryTrajectory()
+{
+    if (!_flag_vis || _vis_hst_pub.getNumSubscribers() == 0) return ;
+    {
+        if (_hist_traj_count) 
+            _hist_traj_count -= 1;
+        else
+        {
+            _hist_traj_count = 10;
+            geometry_msgs::Point32 p;
+            p.x = _odom.pose.pose.position.x;
+            p.y = _odom.pose.pose.position.y;
+            p.z = _odom.pose.pose.position.z;
+            if (_hist_traj_msg.points.size() < 600) 
+                _hist_traj_msg.points.push_back(p);
+            else
+                _hist_traj_msg.points[_hist_traj_iterator] = p;
+            _hist_traj_iterator += 1;
+            _hist_traj_iterator %= 600;
+            if (_hist_traj_iterator % 10 == 0)
+                _vis_hst_pub.publish(_hist_traj_msg);
+        }
+    }
+}
+
 void TrackingTrajectoryGenerator::pubVisualMapGrids()
 {
-    if (!_flag_vis) return ;
+    if (!_flag_vis || _vis_map_pub.getNumSubscribers() == 0) return ;
     _vis_map_pub.publish(getPointCloudFromStdVec(_map->getPointCloud()));
 }
 
 void TrackingTrajectoryGenerator::pubVisualTrackingTrajectory()
 {
-    if (!_flag_vis) return ;
+    if (!_flag_vis || _vis_trk_pub.getNumSubscribers() == 0) return ;
     _vis_trk_pub.publish(getPointCloudFromTraj(_traj_config.coef, _traj_config.time));
 }
 
 void TrackingTrajectoryGenerator::pubVisualTargetTrajectory()
 {
-    if (!_flag_vis) return ;
+    if (!_flag_vis || _vis_est_pub.getNumSubscribers() == 0) return ;
     _vis_est_pub.publish(getPointCloudFromTraj(_crd_config.traj, _crd_config.t_end));
 }
 
 void TrackingTrajectoryGenerator::pubVisualDesiredTrajectory()
 {
-    if (!_flag_vis) return ;
+    if (!_flag_vis || _vis_dsd_pub.getNumSubscribers() == 0) return ;
     _vis_dsd_pub.publish(getPointCloudFromTraj(_crd_config.traj, _crd_config.t_end));
 }
 
 void TrackingTrajectoryGenerator::pubVisualTargetObservation()
 {
-    if (!_flag_vis) return ;
+    if (!_flag_vis || _vis_obs_pub.getNumSubscribers() == 0) return ;
     sensor_msgs::PointCloud cloud;
     cloud.header.frame_id = "/map";
     cloud.header.stamp = ros::Time::now();
@@ -677,7 +686,7 @@ void TrackingTrajectoryGenerator::pubVisualTargetObservation()
 
 void TrackingTrajectoryGenerator::pubVisualTargetCorridor()
 {
-    if (!_flag_vis) return ;
+    if (!_flag_vis || _vis_crd_pub.getNumSubscribers() == 0) return ;
     for (auto & mk: _crd_msg.markers) mk.action = visualization_msgs::Marker::DELETE;
     _vis_crd_pub.publish(_crd_msg);
     _crd_msg = getCorridorMsgByMatrix(
@@ -726,27 +735,18 @@ void TrackingTrajectoryGenerator::visMapCallback(const ros::TimerEvent & evt)
     pubVisualMapGrids();
 }
 
-void TrackingTrajectoryGenerator::rcvLocalLaserScan(const sensor_msgs::LaserScan & scan)
+void TrackingTrajectoryGenerator::pubVisualLaserScan(const sensor_msgs::LaserScan & scan)
 {
-    if (_odom_queue.empty()) return ;
-    if (scan.header.stamp - _laser_stp < _laser_drt) return ;
-    _laser_stp = scan.header.stamp;
+    if (!_flag_vis || _vis_scan_pub.getNumSubscribers() == 0) return ;
 
-    nav_msgs::Odometry laser_odom = _odom_queue.back();
-    for (auto & odom: _odom_queue)
-       if (odom.header.stamp >= _laser_stp)
-       {
-           laser_odom = odom;
-           break;
-       } 
     sensor_msgs::LaserScan _scan = scan;
     _scan.header.frame_id = "/map";
     _vis_scan_pub.publish(_scan);
+}
 
-    auto blk = getStdVecFromLaserScan(scan, laser_odom,
-           _safe_margin, _laser_resolution, _laser_count_thld,
-           _laser_height_thld, _laser_extra_height);
-
+void TrackingTrajectoryGenerator::pubVisualBlocks(const vector<double> & blk)
+{
+    if (!_flag_vis  || _vis_blk_pub.getNumSubscribers() == 0) return ;
     {
         sensor_msgs::PointCloud cloud;
         cloud.header.frame_id = "/map";
@@ -761,6 +761,27 @@ void TrackingTrajectoryGenerator::rcvLocalLaserScan(const sensor_msgs::LaserScan
         }
         _vis_blk_pub.publish(cloud);
     }
+}
+
+void TrackingTrajectoryGenerator::rcvLocalLaserScan(const sensor_msgs::LaserScan & scan)
+{
+    if (_odom_queue.empty()) return ;
+    if (scan.header.stamp - _laser_stp < _laser_drt) return ;
+    _laser_stp = scan.header.stamp;
+    pubVisualLaserScan(scan);
+
+    nav_msgs::Odometry laser_odom = _odom_queue.back();
+    for (auto & odom: _odom_queue)
+       if (odom.header.stamp >= _laser_stp)
+       {
+           laser_odom = odom;
+           break;
+       } 
+
+    auto blk = getStdVecFromLaserScan(scan, laser_odom,
+           _safe_margin, _laser_resolution, _laser_count_thld,
+           _laser_height_thld, _laser_extra_height);
+    pubVisualBlocks(blk);
     //ROS_WARN("[LASER] %d number of points will be added.", (int)blk.size()/6);
 
     _map->insertBlocks(blk);
