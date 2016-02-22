@@ -509,6 +509,7 @@ void TrackingTrajectoryGenerator::pubTrackingTrajectory()
                 _crd_config.t_end);
 #endif
         // if the predicting is overtime, just abort it.
+        if (_odom_queue.empty()) return ;
         if (_odom.header.stamp.toSec() > _crd_config.stamp + _crd_config.t_end) return ;
         // moving the prediction accordingly
         _crd_config.moveForward(_odom.header.stamp.toSec() - _crd_config.stamp);
@@ -760,7 +761,7 @@ void TrackingTrajectoryGenerator::rcvLocalLaserScan(const sensor_msgs::LaserScan
         }
         _vis_blk_pub.publish(cloud);
     }
-    ROS_WARN("[LASER] %d number of points will be added.", (int)blk.size()/6);
+    //ROS_WARN("[LASER] %d number of points will be added.", (int)blk.size()/6);
 
     _map->insertBlocks(blk);
 }
