@@ -125,6 +125,7 @@ private:
     ros::Publisher _vis_dsd_pub; // visual desired trajectory
     ros::Publisher _vis_hst_pub; // visual history trajectory
     ros::Publisher _vis_blk_pub;
+    ros::Publisher _vis_scan_pub;
     
     ros::Publisher _debug_pub; // publish debug & running info
 
@@ -260,6 +261,8 @@ TrackingTrajectoryGenerator::TrackingTrajectoryGenerator(ros::NodeHandle & crt_h
                 "visual_blocks", 10);
         _debug_pub = msg_handle.advertise<std_msgs::String>(
                 "debug_info", 50);
+        _vis_scan_pub = msg_handle.advertise<sensor_msgs::LaserScan>(
+            "visual_scan", 10);
     }
 
     { ///> load dynamic parameters
@@ -330,6 +333,7 @@ TrackingTrajectoryGenerator::TrackingTrajectoryGenerator(ros::NodeHandle & crt_h
         _pose_cam_bd.orientation.x = ort[1]; 
         _pose_cam_bd.orientation.y = ort[2]; 
         _pose_cam_bd.orientation.z = ort[3]; 
+        ROS_WARN("[camera_translation] %lf, %lf, %lf", pos[0], pos[1], pos[2]);
         _cam_drt = ros::Duration(drt);
 
         // the degree of estimatied trajectory
@@ -701,6 +705,8 @@ void TrackingTrajectoryGenerator::regTrajectoryCallback(const ros::TimerEvent & 
                     _traj_msg.action = quadrotor_msgs::PolynomialTrajectory::ACTION_ABORT;
                     flag_abort = true;
                     ROS_WARN_STREAM("[OBSTACLE_CHECK]The old trajectory is doomed!");
+                    ROS_WARN_STREAM("[TRAJ_ACT] " << 
+                        quadrotor_msgs::PolynomialTrajectory::ACTION_ABORT);
                     break;
                 }
             }
@@ -732,6 +738,9 @@ void TrackingTrajectoryGenerator::rcvLocalLaserScan(const sensor_msgs::LaserScan
            laser_odom = odom;
            break;
        } 
+    sensor_msgs::LaserScan _scan = scan;
+    _scan.header.frame_id = "/map";
+    _vis_scan_pub.publish(_scan);
 
     auto blk = getStdVecFromLaserScan(scan, laser_odom,
            _safe_margin, _laser_resolution, _laser_count_thld,
@@ -751,6 +760,7 @@ void TrackingTrajectoryGenerator::rcvLocalLaserScan(const sensor_msgs::LaserScan
         }
         _vis_blk_pub.publish(cloud);
     }
+    ROS_WARN("[LASER] %d number of points will be added.", (int)blk.size()/6);
 
     _map->insertBlocks(blk);
 }

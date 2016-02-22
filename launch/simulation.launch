@@ -128,11 +128,16 @@
                         lower_z : 0.0
                         upper_z : 200.0
                 limited_sensing :
-                    rate : 20
+                    rate : 5
                     angle :
                         min : 0.0
+<<<<<<< Updated upstream
                         max : 6.28318530718
                         count : 180
+=======
+                        max : 6.25176938064
+                        increment : 0.03141592653
+>>>>>>> Stashed changes
                     range :
                         min : 0.1
                         max : 10.0
@@ -191,29 +196,6 @@
             <remap from= "~odom" to = "odometry"/>
         </node>
     </group>
-
-    <node 
-        name = "commander" 
-        type = "simulated_commander_node" 
-        pkg = "tracking_trajectory" 
-        output = "screen">
-        
-        <rosparam>
-            setting :
-                delay : 7.0
-                command_cycle_time : 13.0
-            boundary :
-                lower_x : -20.0
-                upper_x : 20.0
-                lower_y : -20.0
-                upper_y : 20.0
-                lower_z : 0.0
-                upper_z : 5.0
-            check_points_path : '/target/trajectory/check_points'
-        </rosparam>
-        
-        <remap from = "~waypoints" to = "/target/waypointss"/> 
-    </node>   
 
 
     <node 

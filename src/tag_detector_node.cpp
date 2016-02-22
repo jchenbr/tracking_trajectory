@@ -82,8 +82,8 @@ TagDetector::TagDetector(ros::NodeHandle & handle)
         handle.getParam("camera_position", pos);
         handle.getParam("camera_orientation", ort);
         _pose_cam_bd.position.x = pos[_DIM_X];
-        _pose_cam_bd.position.y = pos[_DIM_X];
-        _pose_cam_bd.position.z = pos[_DIM_X];
+        _pose_cam_bd.position.y = pos[_DIM_Y];
+        _pose_cam_bd.position.z = pos[_DIM_Z];
         _pose_cam_bd.orientation.w = ort[0];
         _pose_cam_bd.orientation.x = ort[1];
         _pose_cam_bd.orientation.y = ort[2];
@@ -130,6 +130,7 @@ void TagDetector::rcvImage(const sensor_msgs::ImageConstPtr & p_image)
             {
                 double pos[3], ort[4];
                 mk.OgreGetPoseParameters(pos, ort);
+
                 _pose.pose.position.x = pos[0];
                 _pose.pose.position.y = pos[1];
                 _pose.pose.position.z = pos[2];
@@ -147,8 +148,18 @@ void TagDetector::rcvImage(const sensor_msgs::ImageConstPtr & p_image)
                         odom = o;
                         break;
                     }
+                ROS_WARN("[camera in body](%lf, %lf, %lf), [%lf, %lf, %lf, %lf]", 
+                    _pose_cam_bd.position.x,
+                    _pose_cam_bd.position.y,
+                    _pose_cam_bd.position.z,
+                    _pose_cam_bd.orientation.w,
+                    _pose_cam_bd.orientation.x,
+                    _pose_cam_bd.orientation.y,
+                    _pose_cam_bd.orientation.z
+                    );
 
-
+                _pose.header.stamp = _odom.header.stamp;
+                _pose.header.frame_id = "/map";
                 _pose.pose = getWorldPoseMsgFromCam(
                         _pose.pose, _pose_cam_bd, odom.pose.pose);
 
@@ -181,6 +192,7 @@ void TagDetector::visDetection()
         {
             if (mk.id != tag_id) continue;
             aruco::CvDrawingUtils::draw3dCube(img, mk, _cam_param);
+            aruco::CvDrawingUtils::draw3dAxis(img, mk, _cam_param);
         }
 
     cv::imshow("camera_image", img);

@@ -1,0 +1,78 @@
+<launch>
+    
+    <group ns = "tracker" clear_params = "true">
+        <include ns = "trajectory" file = "$(find tracking_trajectory)/launch/tracking_trajectory_generator.launch">
+            <arg name = "observation_path" value = "/tracker/observation"/>
+            <arg name = "odometry_path" value = "/odom"/>
+            <arg name = "obstacle_points_path" value = "/environment/obstacle_points"/>
+            <arg name = "obstacle_blocks_path" value = "/environment/obstacle_blocks"/>
+            <arg name = "position_cmd_path" value = "/tracker/position_cmd"/>
+            <arg name = "laser_scan_path" value = "/scan"/>
+            <arg name = "trajectory_generation_configuraiton" value = "$(find tracking_trajectory)/config/tracking_trajectory_generator_real.yaml"/>
+        </include>
+        
+        <!-- Visualization -->
+        <node pkg="odom_visualization"
+            name="odom_visualization_ukf"
+            type="odom_visualization"       
+            output="screen">
+            
+            <rosparam>
+                color :
+                    a : 0.8
+                    r : 0.0
+                    g : 1.0
+                    b : 0.0
+                covariance_scale : 100.0
+            </rosparam>  
+            <remap from= "~odom" to = "/tracker/odometry"/>
+        </node>
+    </group>
+
+    <node 
+        pkg = "tracking_trajectory"
+        type = "tag_detector_node"
+        name = "tag_detector"
+        output = "screen">
+        
+        <param name="camera_calibration_file" type="string" value="$(find tracking_trajectory)/config/frontcamera.yml"/> 
+        <rosparam>
+            tag_id : 605
+            marker_size : 0.274
+            
+            odom_queue_size : 300
+            
+            camera_position : [0.15, -0.04, -0.08]
+            camera_orientation : [0.270596, 0.65328, 0.65328, 0.270596]
+        </rosparam>
+        
+        <remap from = "~camera_image" to = "/frontcamera/image"/> 
+        <remap from = "~odometry" to = "/odom"/>
+        <remap from = "~tag_pose" to = "/tracker/observation"/>
+    </node>
+    
+     <node pkg="odom_visualization"
+            name="odom_visualization_ukf"
+            type="odom_visualization"       
+            output="screen">
+            
+            <rosparam>
+                color :
+                    a : 0.8
+                    r : 0.0
+                    g : 0.0
+                    b : 1.0
+                covariance_scale : 100.0
+            </rosparam>  
+            <remap from= "~odom" to = "/odom"/>
+        </node>
+
+    <node 
+        name = "rviz" 
+        pkg = "rviz" 
+        type = "rviz" 
+        output = "screen"
+        respawn = "true"
+        args="-d $(find tracking_trajectory)/config/real_vis.rviz"/>     
+
+</launch>

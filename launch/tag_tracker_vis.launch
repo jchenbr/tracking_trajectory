@@ -1,0 +1,25 @@
+<launch>
+     <node pkg="odom_visualization"
+            name="odom_visualization_ukf"
+            type="odom_visualization"       
+            output="screen">
+            
+            <rosparam>
+                color :
+                    a : 0.8
+                    r : 0.0
+                    g : 0.0
+                    b : 1.0
+                covariance_scale : 100.0
+            </rosparam>  
+            <remap from= "~odom" to = "/odom"/>
+        </node>
+
+    <node 
+        name = "rviz" 
+        pkg = "rviz" 
+        type = "rviz" 
+        output = "screen"
+        respawn = "true"
+        args="-d $(find tracking_trajectory)/config/real_vis.rviz"/>     
+</launch>

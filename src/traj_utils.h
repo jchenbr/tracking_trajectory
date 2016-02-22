@@ -495,7 +495,7 @@ vector<double> getStdVecFromLaserScan(
 
     blk.reserve(cloud.points.size() * _TOT_BDY);
     Eigen::Vector3d last_pt = getGlobalPoint(cloud.points.front());
-    int count = -1;
+    int count = -1, pt_count = 50;
 
     for (auto & lp: cloud.points)
     {

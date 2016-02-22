@@ -1,0 +1,41 @@
+<launch>
+    <arg name = "camera_image" default = "/frontcamera/image"/>
+    <arg name = "odometry" default = "/odom"/>
+    <arg name = "laser_scan" default = "/scan"/>
+    <arg name = "desired_cmd" default = "/tracker/position_cmd"/>
+
+    
+    <group ns = "tracker" clear_params = "true">
+        <include ns = "trajectory" file = "$(find tracking_trajectory)/launch/tracking_trajectory_generator.launch">
+            <arg name = "observation_path" value = "/tracker/observation"/>
+            <arg name = "odometry_path" value = "$(arg odometry)"/>
+            <arg name = "obstacle_points_path" value = "/environment/null"/>
+            <arg name = "obstacle_blocks_path" value = "/environment/null"/>
+            <arg name = "position_cmd_path" value = "$(arg desired_cmd)"/>
+            <arg name = "laser_scan_path" value = "$(arg laser_scan)"/>
+            <arg name = "trajectory_generation_configuraiton" value = "$(find tracking_trajectory)/config/tracking_trajectory_generator_real.yaml"/>
+        </include>
+    </group>
+
+    <node 
+        pkg = "tracking_trajectory"
+        type = "tag_detector_node"
+        name = "tag_detector"
+        output = "screen">
+        
+        <param name="camera_calibration_file" type="string" value="$(find tracking_trajectory)/config/frontcamera.yml"/> 
+        <rosparam>
+            tag_id : 605
+            marker_size : 0.274
+            
+            odom_queue_size : 300
+            
+            camera_position : [0.15, -0.04, -0.08]
+            camera_orientation : [0.270596, 0.65328, 0.65328, 0.270596]
+        </rosparam>
+        
+        <remap from = "~camera_image" to = "$(arg camera_image)"/> 
+        <remap from = "~odometry" to = "$(arg odometry)"/>
+        <remap from = "~tag_pose" to = "/tracker/observation"/>
+    </node>
+</launch>

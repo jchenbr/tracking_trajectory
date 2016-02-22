@@ -7,6 +7,7 @@
     <arg name = "position_cmd_path"/>
     <arg name = "laser_scan_path" default = "/scan"/>
     <arg name = "is_simulation" default = "true"/>
+    <arg name = "trajectory_generation_configuraiton" default = "$(find tracking_trajectory)/config/tracking_trajectory_generator.yaml"/>
 
     <node
         pkg = "tracking_trajectory"
@@ -15,7 +16,7 @@
         name = "trajectory_generator">
         
         <rosparam command = "load"
-            file = "$(find tracking_trajectory)/config/tracking_trajectory_generator.yaml"/>
+            file = "$(arg trajectory_generation_configuraiton)"/>
         <param name = "~setting/is_simulation" value = "$(arg is_simulation)"/>
         
         <!-- subscribed topics -->

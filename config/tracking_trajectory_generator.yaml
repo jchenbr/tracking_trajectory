@@ -58,4 +58,4 @@ visualization :
     corridor:
         color_rbga : [0.1 0.0 0.7 0.1]
     map : 
-        duration : 1.0
+        duration : 3.0
