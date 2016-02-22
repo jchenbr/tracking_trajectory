@@ -180,6 +180,7 @@ void TagDetector::rcvOdometry(const nav_msgs::Odometry & odom)
 
 void TagDetector::visDetection()
 {
+    if (!_is_vis) return ;
     cv::Mat img = _p_bridge->image(cv::Rect(0, 0, 752, 480));
     for (auto & mk: _markers)
     {
