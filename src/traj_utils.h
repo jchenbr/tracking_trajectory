@@ -524,7 +524,7 @@ vector<double> getStdVecFromLaserScan(
         blk.push_back(last_pt(_DIM_X) + margin);
         blk.push_back(last_pt(_DIM_Y) - margin);
         blk.push_back(last_pt(_DIM_Y) + margin);
-        blk.push_back(last_pt(_DIM_Z) - margin);
+        blk.push_back(last_pt(_DIM_Z) - margin - extra_height);
         blk.push_back(last_pt(_DIM_Z) + margin + extra_height);
     }
     return blk;
