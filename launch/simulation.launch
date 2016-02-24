@@ -131,13 +131,8 @@
                     rate : 5
                     angle :
                         min : 0.0
-<<<<<<< Updated upstream
                         max : 6.28318530718
                         count : 180
-=======
-                        max : 6.25176938064
-                        increment : 0.03141592653
->>>>>>> Stashed changes
                     range :
                         min : 0.1
                         max : 10.0

@@ -295,6 +295,31 @@ TrackingTrajectoryGenerator::TrackingTrajectoryGenerator(ros::NodeHandle & crt_h
         param_handle.param("map/safe_margin", _safe_margin, _safe_margin);
 
         this->_initMap();
+        
+        int _n_wall;
+        param_handle.param("map/wall/number", _n_wall, 0);
+        {// insert_virtual_wall
+            vector<double> blk;
+            for (int id = 0; id < _n_wall; ++id)
+            {
+                vector<double> bdy;
+                param_handle.getParam("map/wall/boundary_"+to_string(id), bdy);
+                for (int dim = 0; dim < _TOT_BDY; ++dim) 
+                    blk.push_back(bdy[dim] + ((dim & 1)? _safe_margin : -_safe_margin));
+            }
+            _map->insertBlocks(blk);
+            ROS_WARN_STREAM("[WALL] number: " << _n_wall);
+            for (int id = 0; id < _n_wall; ++id)
+            {
+                ROS_WARN_STREAM("[WALL](" << id << ") = " << 
+                    blk[id * 6 + 0] << ", " <<
+                    blk[id * 6 + 1] << ", " <<
+                    blk[id * 6 + 2] << ", " <<
+                    blk[id * 6 + 3] << ", " <<
+                    blk[id * 6 + 4] << ", " <<
+                    blk[id * 6 + 5]);           
+            }
+        }
     }
 
     { ///> load basic setting;
@@ -397,6 +422,8 @@ void TrackingTrajectoryGenerator::rcvTargetObservation(const geometry_msgs::Pose
         _tgt_obs.push_back(make_pair(pose.header.stamp.toSec(), pos));
         while ((int)_tgt_obs.size() > _sz_tgt_obs) _tgt_obs.pop_front();
     }
+    //ROS_WARN("Any thing Wrong?!");
+    this->pubVisualTargetObservation();
 }
 
 void TrackingTrajectoryGenerator::rcvCurrentOdometry(const nav_msgs::Odometry & odom)
@@ -461,10 +488,13 @@ void TrackingTrajectoryGenerator::pubTrackingTrajectory()
         if (obs.empty()) return ;
 
         double beg_time = (_is_simulation) ? obs.back().first : _odom.header.stamp.toSec();
-
         // move to the relative time
         for (auto & pr: obs) pr.first -= beg_time;
-
+        
+        {
+            auto pr = obs.back();
+            ROS_WARN_STREAM("[obs] time = " << pr.first << ", " << pr.second.transpose());
+        }
         // fixed height 
         if (is_fixed_height) for (auto & pr: obs) pr.second(_DIM_Z) = 0.0;
 
@@ -472,6 +502,11 @@ void TrackingTrajectoryGenerator::pubTrackingTrajectory()
             ros::Time pre_est_stamp = ros::Time::now();
             _crd_config.traj = _estimator->estimateTrajectory(obs);
             est_drt = ros::Time::now() - pre_est_stamp;
+        }
+
+        {
+            auto state = getStateFromTrajByTime(_crd_config.traj, 0.0);
+            ROS_WARN_STREAM("[obs] state = \n" << state);
         }
         _crd_config.t_beg = _pdt_beg;
         _crd_config.t_end = _pdt_end;
@@ -482,7 +517,6 @@ void TrackingTrajectoryGenerator::pubTrackingTrajectory()
         // move the predicted trajectory to get desired trajectory
         _crd_config.traj.row(0) += _kp_dst;
         this->pubVisualDesiredTrajectory();
-        this->pubVisualTargetObservation();
     }
     else
     {
@@ -510,7 +544,7 @@ void TrackingTrajectoryGenerator::pubTrackingTrajectory()
 
         // generate the inital state 
         if (_traj_msg.action != quadrotor_msgs::PolynomialTrajectory::ACTION_ADD
-                ||(_odom.header.stamp - _traj_msg.header.stamp).toSec() > _crd_config.t_end)
+                ||_odom.header.stamp.toSec()> _traj_msg.header.stamp.toSec() + _crd_config.t_end)
         {
             init_state << 
                 _odom.pose.pose.position.x, 
@@ -526,7 +560,7 @@ void TrackingTrajectoryGenerator::pubTrackingTrajectory()
             init_state << getStateFromTrajByTime(
                     _traj_config.coef,
                     _traj_config.time,
-                    (_odom.header.stamp - _traj_msg.header.stamp).toSec() + 0.03);
+                    _odom.header.stamp.toSec() - _traj_msg.header.stamp.toSec() + 0.03);
         }
         { // the kernel call
             ros::Time pre_crd_stamp = ros::Time::now();
@@ -617,7 +651,7 @@ void TrackingTrajectoryGenerator::pubTrackingTrajectory()
 
 void TrackingTrajectoryGenerator::pubVisualHistoryTrajectory()
 {
-    if (!_flag_vis || _vis_hst_pub.getNumSubscribers() == 0) return ;
+    if (!_flag_vis) return ;
     {
         if (_hist_traj_count) 
             _hist_traj_count -= 1;
@@ -642,31 +676,31 @@ void TrackingTrajectoryGenerator::pubVisualHistoryTrajectory()
 
 void TrackingTrajectoryGenerator::pubVisualMapGrids()
 {
-    if (!_flag_vis || _vis_map_pub.getNumSubscribers() == 0) return ;
+    if (!_flag_vis) return ;
     _vis_map_pub.publish(getPointCloudFromStdVec(_map->getPointCloud()));
 }
 
 void TrackingTrajectoryGenerator::pubVisualTrackingTrajectory()
 {
-    if (!_flag_vis || _vis_trk_pub.getNumSubscribers() == 0) return ;
+    if (!_flag_vis) return ;
     _vis_trk_pub.publish(getPointCloudFromTraj(_traj_config.coef, _traj_config.time));
 }
 
 void TrackingTrajectoryGenerator::pubVisualTargetTrajectory()
 {
-    if (!_flag_vis || _vis_est_pub.getNumSubscribers() == 0) return ;
+    if (!_flag_vis) return ;
     _vis_est_pub.publish(getPointCloudFromTraj(_crd_config.traj, _crd_config.t_end));
 }
 
 void TrackingTrajectoryGenerator::pubVisualDesiredTrajectory()
 {
-    if (!_flag_vis || _vis_dsd_pub.getNumSubscribers() == 0) return ;
+    if (!_flag_vis) return ;
     _vis_dsd_pub.publish(getPointCloudFromTraj(_crd_config.traj, _crd_config.t_end));
 }
 
 void TrackingTrajectoryGenerator::pubVisualTargetObservation()
 {
-    if (!_flag_vis || _vis_obs_pub.getNumSubscribers() == 0) return ;
+    if (!_flag_vis) return ;
     sensor_msgs::PointCloud cloud;
     cloud.header.frame_id = "/map";
     cloud.header.stamp = ros::Time::now();
@@ -686,7 +720,7 @@ void TrackingTrajectoryGenerator::pubVisualTargetObservation()
 
 void TrackingTrajectoryGenerator::pubVisualTargetCorridor()
 {
-    if (!_flag_vis || _vis_crd_pub.getNumSubscribers() == 0) return ;
+    if (!_flag_vis) return ;
     for (auto & mk: _crd_msg.markers) mk.action = visualization_msgs::Marker::DELETE;
     _vis_crd_pub.publish(_crd_msg);
     _crd_msg = getCorridorMsgByMatrix(
@@ -700,7 +734,7 @@ void TrackingTrajectoryGenerator::regTrajectoryCallback(const ros::TimerEvent & 
     {// check obstacle along the old trajctory
         if (_traj_msg.action == quadrotor_msgs::PolynomialTrajectory::ACTION_ADD) 
         {
-            double _t_check_beg = (_odom.header.stamp - _traj_msg.header.stamp).toSec();
+            double _t_check_beg = _odom.header.stamp.toSec() - _traj_msg.header.stamp.toSec();
             double _t_check_end = _traj_config.time.sum();
             for (double t = _t_check_beg; t <= _t_check_end; t+= _check_dt)
             {
@@ -746,7 +780,7 @@ void TrackingTrajectoryGenerator::pubVisualLaserScan(const sensor_msgs::LaserSca
 
 void TrackingTrajectoryGenerator::pubVisualBlocks(const vector<double> & blk)
 {
-    if (!_flag_vis  || _vis_blk_pub.getNumSubscribers() == 0) return ;
+    if (!_flag_vis) return ;
     {
         sensor_msgs::PointCloud cloud;
         cloud.header.frame_id = "/map";
@@ -766,7 +800,7 @@ void TrackingTrajectoryGenerator::pubVisualBlocks(const vector<double> & blk)
 void TrackingTrajectoryGenerator::rcvLocalLaserScan(const sensor_msgs::LaserScan & scan)
 {
     if (_odom_queue.empty()) return ;
-    if (scan.header.stamp - _laser_stp < _laser_drt) return ;
+    if (scan.header.stamp < _laser_stp + _laser_drt) return ;
     _laser_stp = scan.header.stamp;
     pubVisualLaserScan(scan);
 
@@ -790,7 +824,7 @@ void TrackingTrajectoryGenerator::rcvLocalLaserScan(const sensor_msgs::LaserScan
 void TrackingTrajectoryGenerator::rcvTagObservation(const geometry_msgs::PoseStamped & pose)
 {
     if (_odom_queue.empty()) return ;
-    if (pose.header.stamp - _cam_stp < _cam_drt) return ;
+    if (pose.header.stamp  < _cam_stp + _cam_drt) return ;
     _cam_stp = pose.header.stamp;
 
     nav_msgs::Odometry cam_odom = _odom_queue.back();

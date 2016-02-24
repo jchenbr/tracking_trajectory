@@ -1,8 +1,7 @@
 
 setting :
     is_simulation : false
-    maintained_distance : [-1.5, -1.0, 1.6]
-    maintained_distance_ : [0.0, 0.0, 0.0]
+    maintained_distance : [-2.0, 0.0, 2.0]
     regeneration_duration : 0.25
     lambda : 10
     
@@ -25,8 +24,8 @@ setting :
 dynamic :
     trajectory_degree : 6
     minimization_degree : 3
-    max_velocity : 1.0
-    max_acceleration : 1.0
+    max_velocity : 2.0
+    max_acceleration : 1.5
     flight_velocity : 1.0
     flight_acceleration : 1.0
 
@@ -34,30 +33,18 @@ dynamic :
 map :
     resolution : 0.008
     safe_margin : 0.5
-    boundary :
+    boundary:
         lower_x : -40.0
         upper_x : 40.0
         lower_y : -40.0
         upper_y : 40.0
         lower_z : 0.0
         upper_z : 80.0
-    wall :
-        number : 5
-        boundary_0 : [-8.0, 9.0, -2.8, 3.8, 3.0, 3.0]
-        boundary_1 : [9.0, 9.0, -2.8, 3.8, 0.0, 3.0]
-        boundary_2 : [-8.0, -8.0, -2.8, 3.8, 0.0, 3.0]
-        boundary_3 : [-8.0, 9.0, -2.8, -2.8, 0.0, 3.0]
-        boundary_4 : [-8.0, 9.0, 3.8, 3.8, 0.0, 3.0]
-        _boundary_0 : [-8.0, 9.0, -3.0, 4.0, 3.0, 3.0]
-        _boundary_1 : [9.0, 9.0, -3.0, 4.0, 0.0, 3.0]
-        _boundary_2 : [-8.0, -8.0, -3.0, 4.0, 0.0, 3.0]
-        _boundary_3 : [-8.0, 9.0, -3.0, -3.0, 0.0, 3.0]
-        _boundary_4 : [-8.0, 9.0, 4.0, 4.0, 0.0, 3.0]
 
 # estimation setting
 estimation :
     reserved_duration : 5.0
-    valid_size : 20
+    valid_size : 10
     trajectory_degree : 6
     observation_size : 40
     predition_time : 5

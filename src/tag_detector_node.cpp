@@ -29,6 +29,7 @@ public:
 
     void rcvImage(const sensor_msgs::ImageConstPtr & p_img);
     void rcvOdometry(const nav_msgs::Odometry &odom);
+    void rcvTrigger(const geometry_msgs::PoseStamped &trg);
     //void pubTagPose();
     void visDetection();
 private:
@@ -44,9 +45,11 @@ private:
     // subscriber
     ros::Subscriber _img_sub;
     ros::Subscriber _odom_sub;
+    ros::Subscriber _trg_sub;
 
     // visualziation flag
     bool _is_vis = true;
+    bool _is_triggered = false;
 
     // OpenCV things
     cv_bridge::CvImagePtr _p_bridge;
@@ -101,6 +104,7 @@ TagDetector::TagDetector(ros::NodeHandle & handle)
     {// subscribed topic
         _img_sub = handle.subscribe("camera_image", 50, &TagDetector::rcvImage, this);
         _odom_sub = handle.subscribe("odometry", 50, &TagDetector::rcvOdometry, this);
+        _trg_sub = handle.subscribe("trigger", 10, &TagDetector::rcvTrigger, this);
     }
 
     {// published topic
@@ -108,12 +112,18 @@ TagDetector::TagDetector(ros::NodeHandle & handle)
     }
 
     {// visualization
-        cv::namedWindow("camera_image");
+        //cv::namedWindow("camera_image");
     }
+}
+
+void TagDetector::rcvTrigger(const geometry_msgs::PoseStamped &trg)
+{
+    _is_triggered = true;
 }
 
 void TagDetector::rcvImage(const sensor_msgs::ImageConstPtr & p_image)
 {
+    if (!_is_triggered) return ;
      // basic info and prepration
 #if 0
     _pose.header = p_image->header;
@@ -148,6 +158,7 @@ void TagDetector::rcvImage(const sensor_msgs::ImageConstPtr & p_image)
                         odom = o;
                         break;
                     }
+                    /*
                 ROS_WARN("[camera in body](%lf, %lf, %lf), [%lf, %lf, %lf, %lf]", 
                     _pose_cam_bd.position.x,
                     _pose_cam_bd.position.y,
@@ -157,6 +168,7 @@ void TagDetector::rcvImage(const sensor_msgs::ImageConstPtr & p_image)
                     _pose_cam_bd.orientation.y,
                     _pose_cam_bd.orientation.z
                     );
+                    */
 
                 _pose.header.stamp = _odom.header.stamp;
                 _pose.header.frame_id = "/map";

@@ -82,7 +82,7 @@ namespace TrackingTrajectory
                                 (i + j - n_min - n_min + 1);
                     //A += _lambda * C * obs.size();
                     double expected_obs = abs(obs.front().first * 20.0);
-                    A = expected_obs / obs.size() * A + _lambda * expected_obs * C;
+                    A =  A + _lambda * obs.size() * C;
                 }
 
                 Eigen::MatrixXd A_tmp = A.transpose() * A;

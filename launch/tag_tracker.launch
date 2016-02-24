@@ -2,7 +2,7 @@
     <arg name = "camera_image" default = "/frontcamera/image"/>
     <arg name = "odometry" default = "/odom"/>
     <arg name = "laser_scan" default = "/scan"/>
-    <arg name = "desired_cmd" default = "/tracker/position_cmd"/>
+    <arg name = "desired_cmd" default = "/position_cmd"/>
 
     
     <group ns = "tracker" clear_params = "true">
@@ -25,6 +25,7 @@
         
         <param name="camera_calibration_file" type="string" value="$(find tracking_trajectory)/config/frontcamera.yml"/> 
         <rosparam>
+            visualization_flag : false
             tag_id : 605
             marker_size : 0.274
             
@@ -37,5 +38,6 @@
         <remap from = "~camera_image" to = "$(arg camera_image)"/> 
         <remap from = "~odometry" to = "$(arg odometry)"/>
         <remap from = "~tag_pose" to = "/tracker/observation"/>
+        <remap from = "~trigger" to = "/traj_start_trigger"/>
     </node>
 </launch>

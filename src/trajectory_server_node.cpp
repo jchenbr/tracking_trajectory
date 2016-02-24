@@ -137,12 +137,12 @@ public:
         else if (traj.action == quadrotor_msgs::PolynomialTrajectory::ACTION_ABORT) 
         {
             ROS_WARN("[SERVER] Aborting the trajectory.");
-            state = HOVER;
+            if (state == TRAJ) state = HOVER;
             _traj_flag = quadrotor_msgs::PositionCommand::TRAJECTORY_STATUS_COMPLETED;
         }
         else if (traj.action == quadrotor_msgs::PolynomialTrajectory::ACTION_WARN_IMPOSSIBLE)
         {
-            state = HOVER;
+            if (state == TRAJ) state = HOVER;
             _traj_flag = quadrotor_msgs::PositionCommand::TRAJECTORY_STATUS_IMPOSSIBLE;
         }
         // #2. try to store the trajectory if the case
@@ -150,6 +150,7 @@ public:
 
     void pubPositionCommand()
     {
+        /*ROS_WARN("[Server] state = %d", state);*/
         // #1. check if it is right state
         if (state == INIT) return;
         if (state == HOVER)
@@ -172,7 +173,7 @@ public:
             _cmd.acceleration.z = 0.0;
             
             _cmd.yaw_dot = 0.0;
-            _cmd.yaw = tf::getYaw(_odom.pose.pose.orientation);
+            _cmd.yaw = _final_yaw;
         }
         // #2. locate the trajectory segment
         if (state == TRAJ)
@@ -182,8 +183,8 @@ public:
             _cmd.trajectory_flag = _traj_flag;
             _cmd.trajectory_id = _traj_id;
 
-            double t = max(0.0, (_odom.header.stamp - _start_time).toSec());
-            if (_odom.header.stamp > _final_time) t = (_final_time - _start_time).toSec();
+            double t = max(0.0, _odom.header.stamp.toSec() - _start_time.toSec());
+            if (_odom.header.stamp > _final_time) t = _final_time.toSec() - _start_time.toSec();
 
             _cmd.yaw_dot = 0.0;
             _cmd.yaw = _start_yaw + (_final_yaw - _start_yaw) * t 
@@ -243,6 +244,18 @@ public:
                 } 
             }
         }
+#if 0
+            _cmd.position.x = 0.0;
+            _cmd.position.y = 0.0;
+            _cmd.position.z = 1.6;
+            _cmd.velocity.x = 0.0;
+            _cmd.velocity.y = 0.0;
+            _cmd.velocity.z = 0.0;
+            _cmd.acceleration.x = 0.0;
+            _cmd.acceleration.y = 0.0;
+            _cmd.acceleration.z = 0.0;
+#endif
+        if (_traj_id == 0) return ;
         // #4. just publish
         _cmd_pub.publish(_cmd);
     }
