@@ -22,4 +22,12 @@
         output = "screen"
         respawn = "true"
         args="-d $(find tracking_trajectory)/config/real_vis.rviz"/>     
+    
+    <node 
+        name = "image_view" 
+        pkg = "image_view" 
+        type = "image_view" 
+        output = "screen"
+        respawn = "true"
+        args="image:=/frontcamera/image"/>  
 </launch>

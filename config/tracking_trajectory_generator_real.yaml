@@ -1,8 +1,8 @@
 
 setting :
     is_simulation : false
-    maintained_distance : [-1.5, -1.0, 1.6]
-    maintained_distance_ : [0.0, 0.0, 0.0]
+    maintained_distance : [-1.5, -0.5, 1.05]
+    maintained_distance_ : [0.0, 0.0, 1.2]
     regeneration_duration : 0.25
     lambda : 10
     
@@ -25,15 +25,15 @@ setting :
 dynamic :
     trajectory_degree : 6
     minimization_degree : 3
-    max_velocity : 1.0
-    max_acceleration : 1.0
+    max_velocity : 1.5
+    max_acceleration : 1.5
     flight_velocity : 1.0
     flight_acceleration : 1.0
 
 # map setting
 map :
     resolution : 0.008
-    safe_margin : 0.5
+    safe_margin : 0.65
     boundary :
         lower_x : -40.0
         upper_x : 40.0
@@ -56,7 +56,7 @@ map :
 
 # estimation setting
 estimation :
-    reserved_duration : 5.0
+    reserved_duration : 7.0
     valid_size : 20
     trajectory_degree : 6
     observation_size : 40

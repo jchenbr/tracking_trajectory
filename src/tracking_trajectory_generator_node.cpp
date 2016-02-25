@@ -491,10 +491,6 @@ void TrackingTrajectoryGenerator::pubTrackingTrajectory()
         // move to the relative time
         for (auto & pr: obs) pr.first -= beg_time;
         
-        {
-            auto pr = obs.back();
-            ROS_WARN_STREAM("[obs] time = " << pr.first << ", " << pr.second.transpose());
-        }
         // fixed height 
         if (is_fixed_height) for (auto & pr: obs) pr.second(_DIM_Z) = 0.0;
 
@@ -504,10 +500,6 @@ void TrackingTrajectoryGenerator::pubTrackingTrajectory()
             est_drt = ros::Time::now() - pre_est_stamp;
         }
 
-        {
-            auto state = getStateFromTrajByTime(_crd_config.traj, 0.0);
-            ROS_WARN_STREAM("[obs] state = \n" << state);
-        }
         _crd_config.t_beg = _pdt_beg;
         _crd_config.t_end = _pdt_end;
         _crd_config.stamp = _odom.header.stamp.toSec();
