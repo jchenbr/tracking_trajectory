@@ -15,6 +15,7 @@
 #include <sensor_msgs/PointCloud.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <nav_msgs/Odometry.h>
+#include <math.h>
 
 #include <eigen3/Eigen/Dense>
 
@@ -27,6 +28,8 @@
 using namespace std;
 using namespace TrackingTrajectory;
 
+///> const values
+const double _PI = acos(-1.0);
 
 class TrackingTrajectoryGenerator
 {
@@ -88,6 +91,7 @@ public:
 
     ///> the delievery of resulting trajectory
     void pubTrackingTrajectory();
+    void pubDesiredYaw(double y, double x);
     ///> the visual data 
     void pubVisualTargetTrajectory();
     void pubVisualTargetCorridor();
@@ -103,6 +107,7 @@ public:
     void regTrajectoryCallback(const ros::TimerEvent & evt);
     void visMapCallback(const ros::TimerEvent & evt);  
 private:
+
 
     bool _is_simulation = true;
 
@@ -190,6 +195,7 @@ private:
     double _max_vel = 1.0, _max_acc = 1.0;                      // dynamic limitations
     double _flt_vel = 1.0, _flt_acc = 1.0;                      // dynamic data for time allocation (not used for this traj)
     double _check_dt = 0.03;                                    // time step for check obstable along the traj
+    double _max_d_yaw = _PI/10;
     Eigen::RowVectorXd _kp_dst;                                 // the distance vector to the target
 
     quadrotor_msgs::PolynomialTrajectory _traj_msg;
@@ -275,6 +281,7 @@ TrackingTrajectoryGenerator::TrackingTrajectoryGenerator(ros::NodeHandle & crt_h
         param_handle.param("dynamic/max_acceleration", _max_acc, _max_acc);
         param_handle.param("dynamic/flight_velocity", _flt_vel, _flt_vel);
         param_handle.param("dynamic/flight_acceleration", _flt_acc, _flt_acc);
+        param_handle.param("dynamic/max_delta_yaw", _max_d_yaw, _max_d_yaw);
 
         _crd_config.N = _n_dgr_traj;
         _crd_config.R = _n_dgr_min;
@@ -403,14 +410,9 @@ void TrackingTrajectoryGenerator::rcvTargetObservation(const geometry_msgs::Pose
 {
 #if 1
     { // when observed target, control yaw accordingly
-        std_msgs::Float64 yaw;
-        double y = pose.pose.position.y - _odom.pose.pose.position.y;
-        double x = pose.pose.position.x - _odom.pose.pose.position.x;
-        if (abs(x) + abs(y) > 0.2)
-        {
-            yaw.data = atan2(y, x);
-            _yaw_pub.publish(yaw);
-        }
+        pubDesiredYaw(
+                pose.pose.position.y - _odom.pose.pose.position.y, 
+                pose.pose.position.x - _odom.pose.pose.position.x);
     }
 #endif
     {
@@ -456,14 +458,9 @@ void TrackingTrajectoryGenerator::rcvCurrentOdometry(const nav_msgs::Odometry & 
     {
         auto state = getStateFromTrajByTime(_crd_config.traj, 
                 _odom.header.stamp.toSec() - _crd_config.stamp);
-        std_msgs::Float64 yaw;
-        double y = state(_STT_POS, _DIM_Y) - _kp_dst[_DIM_Y] - _odom.pose.pose.position.y;
-        double x = state(_STT_POS, _DIM_X) - _kp_dst[_DIM_X] - _odom.pose.pose.position.x;
-        if (abs(x) + abs(y) > 0.05)
-        {
-            yaw.data = atan2(y, x);
-            _yaw_pub.publish(yaw);
-        }
+        pubDesiredYaw(
+            state(_STT_POS, _DIM_Y) - _kp_dst[_DIM_Y] - _odom.pose.pose.position.y, 
+            state(_STT_POS, _DIM_X) - _kp_dst[_DIM_X] - _odom.pose.pose.position.x);
     }
 }
 
@@ -664,6 +661,25 @@ void TrackingTrajectoryGenerator::pubVisualHistoryTrajectory()
                 _vis_hst_pub.publish(_hist_traj_msg);
         }
     }
+}
+
+void TrackingTrajectoryGenerator::pubDesiredYaw(double y, double x)
+{
+    if (abs(x) + abs(y) < 0.1) return ;
+    double yaw = atan2(y, x);
+    double cur_yaw = tf::getYaw(_odom.pose.pose.orientation);
+
+    // delta_yaw in [0, 2 pi]
+    double d_yaw = fmod(fmod(yaw - cur_yaw, 2 * _PI) + 2 * _PI, 2 * _PI);
+    // delta_way in [-pi, pi]
+    d_yaw = fmod(d_yaw + _PI, 2 * _PI) - _PI;
+    // bound it by [-max_d_yaw, max_d_yaw]
+    d_yaw = max(-_max_d_yaw, min(_max_d_yaw, d_yaw));
+
+    std_msgs::Float64 yaw_msg;
+    yaw_msg.data = cur_yaw + d_yaw;
+
+    _yaw_pub.publish(yaw_msg);
 }
 
 void TrackingTrajectoryGenerator::pubVisualMapGrids()
