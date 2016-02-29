@@ -76,6 +76,9 @@ class TrackingTrajectoryGenerator
     //  40. simulated laser
     //  41. improved target observer: obstacle aware, field of view. 
     //  42. stop trajectory if obstacle within the old trajectory. (done)
+    //  43. remove the height threshold.
+    //  44. add a initial stage for stopping adding obstacle when take off.
+    //  45. add a obstacle filter to throw away unrelated obstacles.
 
 public:
     ///> the intialization!
@@ -164,6 +167,7 @@ private:
     bool is_fixed_height = true;
 
     // info about map
+    bool _is_map_ready = false;
     VoxelTrajectory::OctoMap * _map = NULL;
 
     ros::Timer _vis_map_tmr; 
@@ -173,6 +177,7 @@ private:
     vector<double> _bdy {-100.0, 100.0, -100.0, 100.0, 0.0, 200.0}; // boundary of the environment
     double _map_resolution = 0.2 * 0.2 * 0.2;                       // map grid resolution
     double _safe_margin = 0.2;                                      // safe margin adding to obstacle
+    double _map_ready_thld = 1.0;
 
     // laser message
     double _laser_resolution = 0.1;                                 // laser points resolution
@@ -300,6 +305,7 @@ TrackingTrajectoryGenerator::TrackingTrajectoryGenerator(ros::NodeHandle & crt_h
         param_handle.param("map/boundary/upper_z", _bdy[_BDY_R_Z], _bdy[_BDY_R_Z]);
         param_handle.param("map/resolution", _map_resolution, _map_resolution);
         param_handle.param("map/safe_margin", _safe_margin, _safe_margin);
+        param_handle.param("map/ready_threshold", _map_ready_thld, _map_ready_thld);
 
         this->_initMap();
         
@@ -526,6 +532,22 @@ void TrackingTrajectoryGenerator::pubTrackingTrajectory()
 
     //ROS_WARN("[TRK_TRAJ] going to find the corridor");
     // allowed time end variable will be used if the corridor tail is obstacled.
+
+    while (_crd_config.t_end <= _pdt_end + 4.0)
+    {
+        auto state = getStateFromTrajByTime(
+            _crd_config.traj,
+            _crd_config.t_end);
+
+        double pt[_TOT_DIM] {
+            state(_STT_POS, _DIM_X),
+            state(_STT_POS, _DIM_Y),
+            state(_STT_POS, _DIM_Z),
+        };
+
+        if (_map->testObstacle(pt)) _crd_config.t_end += 1.0;
+    }
+
     double allowed_t_end = _crd_config.t_end;
     {// generation of the flight corridor
         pair<Eigen::MatrixXd, Eigen::MatrixXd> flt_crd;
@@ -809,6 +831,12 @@ void TrackingTrajectoryGenerator::rcvLocalLaserScan(const sensor_msgs::LaserScan
 {
     if (_odom_queue.empty()) return ;
     if (scan.header.stamp < _laser_stp + _laser_drt) return ;
+
+    {
+        if (!_is_map_ready && _odom.pose.pose.position.z >= _map_ready_thld) _is_map_ready = true;
+        if (!_is_map_ready) return ;
+    }
+
     _laser_stp = scan.header.stamp;
     pubVisualLaserScan(scan);
 

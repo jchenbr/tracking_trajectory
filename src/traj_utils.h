@@ -505,7 +505,9 @@ vector<double> getStdVecFromLaserScan(
             count += 1;
         else
         {
-            if (count >= count_thld && pt(_DIM_Z) > height_thld)
+            if (count >= count_thld && 
+                    abs(pt(_DIM_Z) - odom.pose.pose.position.z) 
+                    < height_thld)
             {
                 blk.push_back(pt(_DIM_X) - margin);
                 blk.push_back(pt(_DIM_X) + margin);
@@ -551,7 +553,7 @@ Eigen::Vector3d getWorldPositionFromCam(
     p_bd_wd <<
         pose_bd_wd.position.x,
         pose_bd_wd.position.y,
-        pose_bd_wd.position.x;
+        pose_bd_wd.position.z;
 
 
     o_cam_bd = Quaterniond(
