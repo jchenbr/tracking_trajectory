@@ -905,22 +905,24 @@ namespace VoxelTrajectory
                 t_path.push_back(make_pair(t, t_end));
                 break;
             }
-
-            // t_next out of boundary, move to the end of the segment
-            double l = t - step, r = t_next, mid;
-            while (l + eps < r)
+            else
             {
-                mid = (l + r) * 0.5;
-                if (isWithin(getTrajPoint(mid), gid))
-                    l = mid;
-                else
-                    r = mid;
+                // t_next out of boundary, move to the end of the segment
+                double l = t, r = t_next, mid;
+                while (l + eps < r)
+                {
+                    mid = (l + r) * 0.5;
+                    if (isWithin(getTrajPoint(mid), gid))
+                        l = mid;
+                    else
+                        r = mid;
+                }
+                id_path.push_back(gid);
+                t_path.push_back(make_pair(t, l));
+                t = r + eps;
             }
-            id_path.push_back(gid);
-            t_path.push_back(make_pair(t, l));
-            t = r;
         }
-#if 0
+#if 1
         ROS_INFO("[corridor] T = [%lf, %lf]", t_start, t_end);
         ROS_INFO_STREAM("[corridor] traj : \n" << coef);
         {
@@ -1340,7 +1342,7 @@ namespace VoxelTrajectory
             }
 
             // t_next out of boundary, move to the end of the segment
-            double l = t - step, r = t_next, mid;
+            double l = t, r = t_next, mid;
             while (l + eps < r)
             {
                 mid = (l + r) * 0.5;

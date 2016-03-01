@@ -73,12 +73,16 @@ class TrackingTrajectoryGenerator
     //  37. feature: allow infeasible end.
     //  38. bug: if diff of odom stamp and traj stamp. (done)
     //  39. visulize the history trajectory. (done)
-    //  40. simulated laser
-    //  41. improved target observer: obstacle aware, field of view. 
+    //  40. simulated laser (done)
+    //  41. improved target observer: obstacle aware, field of view. (done)
     //  42. stop trajectory if obstacle within the old trajectory. (done)
-    //  43. remove the height threshold.
-    //  44. add a initial stage for stopping adding obstacle when take off.
-    //  45. add a obstacle filter to throw away unrelated obstacles.
+    //  43. remove the height threshold. (done)
+    //  44. add a initial stage for stopping adding obstacle when take off. (done)
+    //  45. add a obstacle filter to throw away unrelated obstacles. (done)
+    //  46. extend the estimation trajectory (done)
+    //  47. bug: drifting height (done)
+    //  48. bug: the inflation cost too much time.
+    //  49. bug: unknown stopping 
 
 public:
     ///> the intialization!
@@ -153,6 +157,7 @@ private:
     deque<pair<double, Eigen::VectorXd> > _tgt_obs;             // observations
     int _sz_tgt_obs = 200;                                      // observations size
     double _pdt_end = 5.0, _pdt_beg = 0.0;                      // prediction time
+    double _ext_drt = 4.0;
     int _n_dgr_est = 4;                                         // estimation traj order
     visualization_msgs::MarkerArray _crd_msg;                   // corridor vis message
     geometry_msgs::Pose _pose_cam_bd;
@@ -383,6 +388,7 @@ TrackingTrajectoryGenerator::TrackingTrajectoryGenerator(ros::NodeHandle & crt_h
         param_handle.param("estimation/valid_size", _obs_valid_num, _obs_valid_num);
         param_handle.param("estimation/reserved_duration", _obs_rsv_drt, _obs_rsv_drt);
         param_handle.param("estimation/predition_time", _pdt_end, _pdt_end);
+        param_handle.param("estimation/extend_duration",_ext_drt, _ext_drt);
         param_handle.param("estimation/valid_lost_duration", _valid_lost_drt, _valid_lost_drt);
         double lambda = 0.01;
         param_handle.param("estimation/lambda", lambda, lambda);
@@ -530,9 +536,9 @@ void TrackingTrajectoryGenerator::pubTrackingTrajectory()
     }
     //ROS_WARN_STREAM("[TRK_TRAJ] estimated traj:\n" << _crd_config.traj);
 
-    //ROS_WARN("[TRK_TRAJ] going to find the corridor");
     // allowed time end variable will be used if the corridor tail is obstacled.
-
+#if 1
+    // ROS_WARN("[TRK_TRAJ] extend the trajectory");
     while (_crd_config.t_end <= _pdt_end + 4.0)
     {
         auto state = getStateFromTrajByTime(
@@ -545,9 +551,14 @@ void TrackingTrajectoryGenerator::pubTrackingTrajectory()
             state(_STT_POS, _DIM_Z),
         };
 
-        if (_map->testObstacle(pt)) _crd_config.t_end += 1.0;
+        if (_map->testObstacle(pt)) 
+            _crd_config.t_end += 1.0;
+        else
+            break;
     }
+#endif
 
+    // ROS_WARN("[TRK_TRAJ] going to find the start of corridor");
     double allowed_t_end = _crd_config.t_end;
     {// generation of the flight corridor
         pair<Eigen::MatrixXd, Eigen::MatrixXd> flt_crd;
@@ -573,6 +584,7 @@ void TrackingTrajectoryGenerator::pubTrackingTrajectory()
                     _traj_config.time,
                     _odom.header.stamp.toSec() - _traj_msg.header.stamp.toSec() + 0.03);
         }
+        // ROS_WARN("[TRK_TRAJ] going to find the corridor");
         { // the kernel call
             ros::Time pre_crd_stamp = ros::Time::now();
             if (!_map->retPathFromTraj(
@@ -590,7 +602,7 @@ void TrackingTrajectoryGenerator::pubTrackingTrajectory()
        //         << ", " << flt_crd.second.rows() << ", " << flt_crd.second.cols());
        // ROS_WARN_STREAM("\n grid :\n" << flt_crd.first << "\nface:\n" << flt_crd.second);
 
-        //ROS_WARN("[TRK_TRAJ] corridor found!");
+        // ROS_WARN("[TRK_TRAJ] corridor found!");
         // get the segment number
         _crd_config.M = flt_crd.first.rows();
 
@@ -620,7 +632,7 @@ void TrackingTrajectoryGenerator::pubTrackingTrajectory()
 
 
     {// generation of the flight trajectory
-        //ROS_WARN("[TRK_TRAJ] going to generate tracking traj!");
+        // ROS_WARN("[TRK_TRAJ] going to generate tracking traj!");
         { // call the kernel
             ros::Time pre_trj_stamp = ros::Time::now();
             auto tmp_config = _generator->getTrackingTrajectory(_crd_config);
@@ -645,6 +657,7 @@ void TrackingTrajectoryGenerator::pubTrackingTrajectory()
 
         this->pubVisualTrackingTrajectory();
     }
+    // ROS_WARN("[TRK_TRAJ] trajetory generation!");
 
     {// publish the runtime info if trajectory is generated
         stringstream str_in;

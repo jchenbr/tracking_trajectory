@@ -1,16 +1,16 @@
 
 setting :
     is_simulation : false
-    maintained_distance : [-1.5, -0.5, 1.05]
+    maintained_distance : [-1.5, -0.5, 1.20]
     maintained_distance_ : [0.0, 0.0, 1.2]
     regeneration_duration : 0.25
-    lambda : 10
+    lambda : 1
     
     # laser setting
     laser :
         resolution : 0.05
         count_threshold : 2
-        laser_height_threshold : 0.25
+        laser_height_threshold : 0.5
         extra_height : 3.5
         cycle_duration : 0.1
     
@@ -43,11 +43,11 @@ map :
         upper_z : 80.0
     wall :
         number : 5
-        boundary_0 : [-8.0, 9.0, -2.8, 3.8, 3.0, 3.0]
-        boundary_1 : [9.0, 9.0, -2.8, 3.8, 0.0, 3.0]
-        boundary_2 : [-8.0, -8.0, -2.8, 3.8, 0.0, 3.0]
-        boundary_3 : [-8.0, 9.0, -2.8, -2.8, 0.0, 3.0]
-        boundary_4 : [-8.0, 9.0, 3.8, 3.8, 0.0, 3.0]
+        boundary_0 : [-800.0, 900.0, -280, 380, 3.0, 300.0]
+        boundary_1 : [9.0, 900.0, -280, 380, 0.0, 300.0]
+        boundary_2 : [-800.0, -8.0, -280, 380, 0.0, 300.0]
+        boundary_3 : [-800.0, 900.0, -280, -2.8, 0.0, 300.0]
+        boundary_4 : [-800.0, 900.0, 3.8, 380, 0.0, 300.0]
         _boundary_0 : [-8.0, 9.0, -3.0, 4.0, 3.0, 3.0]
         _boundary_1 : [9.0, 9.0, -3.0, 4.0, 0.0, 3.0]
         _boundary_2 : [-8.0, -8.0, -3.0, 4.0, 0.0, 3.0]

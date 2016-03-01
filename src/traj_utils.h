@@ -593,7 +593,7 @@ geometry_msgs::Pose getWorldPoseMsgFromCam(
     p_bd_wd <<
         pose_bd_wd.position.x,
         pose_bd_wd.position.y,
-        pose_bd_wd.position.x;
+        pose_bd_wd.position.z;
 
     o_tgt_cam = Quaterniond(
         pose_tgt_cam.orientation.w,
